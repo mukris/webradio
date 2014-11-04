@@ -54,6 +54,8 @@
 #ifndef FREERTOS_CONFIG_H
 #define FREERTOS_CONFIG_H
 
+#include "FreeRTOS.h"
+
 /*-----------------------------------------------------------
  * Application specific definitions.
  *
@@ -70,7 +72,7 @@
 #define configUSE_IDLE_HOOK                 0
 #define configUSE_TICK_HOOK                 0
 #define configCPU_CLOCK_HZ                  ( ( unsigned long ) 50000000 )
-#define configTICK_RATE_HZ                  ( ( portTickType ) 1000 )
+#define configTICK_RATE_HZ                  ( 1000 )
 #define configMINIMAL_STACK_SIZE            ( ( unsigned short ) 200 )
 #define configTOTAL_HEAP_SIZE               ( ( size_t ) ( 30000 ) )
 #define configMAX_TASK_NAME_LEN             ( 12 )
@@ -80,6 +82,7 @@
 #define configUSE_CO_ROUTINES               0
 #define configUSE_MUTEXES                   1
 #define configUSE_RECURSIVE_MUTEXES         1
+#define configUSE_COUNTING_SEMAPHORES       1
 #define configCHECK_FOR_STACK_OVERFLOW      2
 
 #define configMAX_PRIORITIES                ( 16 )
