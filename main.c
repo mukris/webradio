@@ -11,6 +11,7 @@
 #include "driverlib/rom.h"
 #include "driverlib/rom_map.h"
 #include "driverlib/sysctl.h"
+#include "driverlib/systick.h"
 #include "driverlib/uart.h"
 #include "utils/uartstdio.h"
 #include "FreeRTOS.h"
@@ -18,6 +19,9 @@
 #include "task.h"
 #include "queue.h"
 #include "semphr.h"
+
+// System Clock rate in Hertz.
+uint32_t g_ui32SysClock;
 
 /* The default IP and MAC address used by the demo.  The address configuration
  defined here will be used if ipconfigUSE_DHCP is 0, or if ipconfigUSE_DHCP is
@@ -105,11 +109,17 @@ int main(void)
 	SysCtlMOSCConfigSet(SYSCTL_MOSC_HIGHFREQ);
 
 	// Set the clocking to run at 120 MHz from the PLL.
-	MAP_SysCtlClockFreqSet((SYSCTL_XTAL_25MHZ | SYSCTL_OSC_MAIN | SYSCTL_USE_PLL | SYSCTL_CFG_VCO_480), 120000000);
+	g_ui32SysClock = MAP_SysCtlClockFreqSet((SYSCTL_XTAL_25MHZ | SYSCTL_OSC_MAIN | SYSCTL_USE_PLL | SYSCTL_CFG_VCO_480),
+											120000000);
 
 	PinoutSet();
 
 	FreeRTOS_IPInit(ucIPAddress, ucNetMask, ucGatewayAddress, ucDNSServerAddress, ucMACAddress);
+
+	// Configure SysTick for a periodic interrupt at 10ms.
+	SysTickPeriodSet((g_ui32SysClock / 1000) * 10);
+	SysTickEnable();
+	SysTickIntEnable();
 
 	IntMasterEnable();
 
