@@ -54,4 +54,9 @@ SECTIONS
         *(COMMON)
         _ebss = .;
     } > SRAM
+    
+   .ARM.exidx :
+  {
+    *(.ARM.exidx* .gnu.linkonce.armexidx.*)
+  } > SRAM
 }
