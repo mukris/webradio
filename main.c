@@ -44,6 +44,10 @@ static const uint8_t ucDNSServerAddress[4] =
 const uint8_t ucMACAddress[6] =
 { configMAC_ADDR0, configMAC_ADDR1, configMAC_ADDR2, configMAC_ADDR3, configMAC_ADDR4, configMAC_ADDR5 };
 
+/* The size of the stack and the priority used by the two echo client tasks. */
+#define mainECHO_CLIENT_TASK_STACK_SIZE 	( configMINIMAL_STACK_SIZE * 2 )
+#define mainECHO_CLIENT_TASK_PRIORITY		( tskIDLE_PRIORITY + 1 )
+
 void PinoutSet(void)
 {
 	// Enable all the GPIO peripherals.
@@ -190,7 +194,8 @@ void vApplicationIPNetworkEventHook(eIPCallbackEvent_t eNetworkEvent)
 		 standard and zero copy mode. */
 		if (xTaskAlreadyCreated == pdFALSE)
 		{
-			//vStartEchoClientTasks( mainECHO_CLIENT_TASK_STACK_SIZE, mainECHO_CLIENT_TASK_PRIORITY );
+			UARTprintf("Starting Echo tasks\n");
+			vStartEchoClientTasks( mainECHO_CLIENT_TASK_STACK_SIZE, mainECHO_CLIENT_TASK_PRIORITY);
 			xTaskAlreadyCreated = pdTRUE;
 		}
 	}
