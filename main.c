@@ -114,6 +114,8 @@ int main(void)
 
 	PinoutSet();
 
+	UARTStdioConfig(0, 115200, g_ui32SysClock);
+
 	FreeRTOS_IPInit(ucIPAddress, ucNetMask, ucGatewayAddress, ucDNSServerAddress, ucMACAddress);
 
 	// Configure SysTick for a periodic interrupt at 10ms.
@@ -125,6 +127,8 @@ int main(void)
 
 	IntPriorityGroupingSet(4);
 	IntPrioritySet(INT_EMAC0_TM4C129, configMAC_INTERRUPT_PRIORITY);
+
+	UARTprintf("--- Starting OS ---\n\n");
 
 	vTaskStartScheduler();
 
@@ -145,7 +149,9 @@ void vApplicationStackOverflowHook(xTaskHandle *pxTask, char *pcTaskName)
 	/* Run time stack overflow checking is performed if
 	 configCHECK_FOR_STACK_OVERFLOW is defined to 1 or 2.  This hook
 	 function is called if a stack overflow is detected. */
+	UARTprintf("ERROR: ApplicationStackOverflow\n");
 	taskDISABLE_INTERRUPTS();
+
 	for (;;)
 		;
 }
@@ -164,7 +170,9 @@ void vApplicationMallocFailedHook(void)
 	 API function can be used to query the size of free heap space that remains
 	 (although it does not provide information on how the remaining heap might
 	 be fragmented). */
+	UARTprintf("ERROR: ApplicationMallocFailed\n");
 	taskDISABLE_INTERRUPTS();
+
 	for (;;)
 		;
 }

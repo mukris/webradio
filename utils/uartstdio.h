@@ -26,6 +26,7 @@
 #define __UARTSTDIO_H__
 
 #include <stdarg.h>
+#include <stdbool.h>
 
 //*****************************************************************************
 //
@@ -44,6 +45,7 @@ extern "C"
 // the transmit and receive buffers respectively.
 //
 //*****************************************************************************
+#define UART_BUFFERED
 #ifdef UART_BUFFERED
 #ifndef UART_RX_BUFFER_SIZE
 #define UART_RX_BUFFER_SIZE     128

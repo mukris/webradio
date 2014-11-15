@@ -368,6 +368,8 @@ void ETH_IRQHandler(void)
 {
 	uint32_t ulInterruptCause;
 
+	UARTprintf("ETH interrupt\n");
+
 	ulInterruptCause = EMACIntStatus(EMAC0_BASE, true);
 	EMACIntClear(EMAC0_BASE, ulInterruptCause);
 
@@ -386,6 +388,8 @@ void ETH_IRQHandler(void)
 void EMAC_NextPacketToRead( xNetworkBufferDescriptor_t *pxNetworkBuffer )
 {
 uint8_t *pucTemp;
+
+	UARTprintf("EMAC_NextPacketToRead\n");
 
 	/* Swap the buffer in the network buffer with the buffer used by the DMA.
 	This allows the data to be passed out without having to perform any copies. */
