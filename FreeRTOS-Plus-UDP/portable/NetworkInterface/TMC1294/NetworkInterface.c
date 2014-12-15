@@ -510,7 +510,7 @@ static void prvEMACDeferredInterruptHandlerTask(void *pvParameters)
 			/* Move on to the next descriptor in the chain. */
 			g_ui32RxDescIndex++;
 
-			if (g_ui32RxDescIndex == configNUM_TX_ETHERNET_DMA_DESCRIPTORS)
+			if (g_ui32RxDescIndex == configNUM_RX_ETHERNET_DMA_DESCRIPTORS)
 			{
 				g_ui32RxDescIndex = 0;
 			}
