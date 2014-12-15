@@ -468,8 +468,8 @@ static void prvEMACDeferredInterruptHandlerTask(void *pvParameters)
 					 The pointer	is needed to ensure the network buffer structure
 					 can be located when it is time for it to be freed if the
 					 Ethernet frame gets	used as a zero copy buffer. */
-					*((xNetworkBufferDescriptor_t **) ((pxNetworkBuffer->pucEthernetBuffer - ipBUFFER_PADDING))) =
-							pxNetworkBuffer;
+					/**((xNetworkBufferDescriptor_t **) ((pxNetworkBuffer->pucEthernetBuffer - ipBUFFER_PADDING))) =
+							pxNetworkBuffer;*/
 
 					/* Data was received and stored.  Send it to the IP task
 					 for processing. */
