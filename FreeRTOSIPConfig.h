@@ -1,12 +1,119 @@
 /*
- * FreeRTOSIPConfig.h
+ * FreeRTOS+TCP Labs Build 141019 (C) 2014 Real Time Engineers ltd.
+ * Authors include Hein Tibosch and Richard Barry
  *
- *  Created on: 2014 nov. 1
- *      Author: Kristóf
+ *******************************************************************************
+ ***** NOTE ******* NOTE ******* NOTE ******* NOTE ******* NOTE ******* NOTE ***
+ ***                                                                         ***
+ ***                                                                         ***
+ ***   FREERTOS+TCP IS STILL IN THE LAB:                                     ***
+ ***                                                                         ***
+ ***   This product is functional and is already being used in commercial    ***
+ ***   products.  Be aware however that we are still refining its design,    ***
+ ***   the source code does not yet fully conform to the strict coding and   ***
+ ***   style standards mandated by Real Time Engineers ltd., and the         ***
+ ***   documentation and testing is not necessarily complete.                ***
+ ***                                                                         ***
+ ***   PLEASE REPORT EXPERIENCES USING THE SUPPORT RESOURCES FOUND ON THE    ***
+ ***   URL: http://www.FreeRTOS.org/contact  Active early adopters may, at   ***
+ ***   the sole discretion of Real Time Engineers Ltd., be offered versions  ***
+ ***   under a license other than that described below.                      ***
+ ***                                                                         ***
+ ***                                                                         ***
+ ***** NOTE ******* NOTE ******* NOTE ******* NOTE ******* NOTE ******* NOTE ***
+ *******************************************************************************
+ *
+ * - Open source licensing -
+ * While FreeRTOS+TCP is in the lab it is provided only under version two of the
+ * GNU General Public License (GPL) (which is different to the standard FreeRTOS
+ * license).  FreeRTOS+TCP is free to download, use and distribute under the
+ * terms of that license provided the copyright notice and this text are not
+ * altered or removed from the source files.  The GPL V2 text is available on
+ * the gnu.org web site, and on the following
+ * URL: http://www.FreeRTOS.org/gpl-2.0.txt.  Active early adopters may, and
+ * solely at the discretion of Real Time Engineers Ltd., be offered versions
+ * under a license other then the GPL.
+ *
+ * FreeRTOS+TCP is distributed in the hope that it will be useful.  You cannot
+ * use FreeRTOS+TCP unless you agree that you use the software 'as is'.
+ * FreeRTOS+TCP is provided WITHOUT ANY WARRANTY; without even the implied
+ * warranties of NON-INFRINGEMENT, MERCHANTABILITY or FITNESS FOR A PARTICULAR
+ * PURPOSE. Real Time Engineers Ltd. disclaims all conditions and terms, be they
+ * implied, expressed, or statutory.
+ *
+ * 1 tab == 4 spaces!
+ *
+ * http://www.FreeRTOS.org
+ * http://www.FreeRTOS.org/udp
+ *
  */
 
-#ifndef FREERTOSIPCONFIG_H
-#define FREERTOSIPCONFIG_H
+
+/*****************************************************************************
+ *
+ * See the following URL for configuration information.
+ * http://www.freertos.org/FreeRTOS-Plus/FreeRTOS_Plus_TCP/TCP_IP_Configuration.html
+ *
+ *****************************************************************************/
+
+#ifndef FREERTOS_IP_CONFIG_H
+#define FREERTOS_IP_CONFIG_H
+
+/* Prototype for the function used to print out.  In this case it prints to the
+console before the network is connected then a UDP port after the network has
+connected. */
+extern void vLoggingPrintf( const char *pcFormatString, ... );
+
+/* Set to 1 to print out debug messages.  If ipconfigHAS_DEBUG_PRINTF is set to
+1 then FreeRTOS_debug_printf should be defined to the function used to print
+out the debugging messages. */
+#define ipconfigHAS_DEBUG_PRINTF	1
+#if( ipconfigHAS_DEBUG_PRINTF == 1 )
+	#define FreeRTOS_debug_printf(X)	UARTprintf X
+#endif
+
+/* Set to 1 to print out non debugging messages, for example the output of the
+FreeRTOS_netstat() command, and ping replies.  If ipconfigHAS_PRINTF is set to 1
+then FreeRTOS_printf should be set to the function used to print out the
+messages. */
+#define ipconfigHAS_PRINTF			1
+#if( ipconfigHAS_PRINTF == 1 )
+	#define FreeRTOS_printf(X)			UARTprintf X
+#endif
+
+/* Define the byte order of the target MCU (the MCU FreeRTOS+TCP is executing
+on).  Valid options are FREERTOS_BIG_ENDIAN and FREERTOS_LITTLE_ENDIAN. */
+#define ipconfigBYTE_ORDER FREERTOS_LITTLE_ENDIAN
+
+/* If the network card/driver includes checksum offloading (IP/TCP/UDP checksums)
+then set ipconfigDRIVER_INCLUDED_RX_IP_CHECKSUM to 1 to prevent the software
+stack repeating the checksum calculations. */
+#define ipconfigDRIVER_INCLUDED_RX_IP_CHECKSUM   1
+
+/* Several API's will block until the result is known, or the action has been
+performed, for example FreeRTOS_send() and FreeRTOS_recv().  The timeouts can be
+set per socket, using setsockopt().  If not set, the times below will be
+used as defaults. */
+#define ipconfigSOCK_DEFAULT_RECEIVE_BLOCK_TIME	( 5000 )
+#define	ipconfigSOCK_DEFAULT_SEND_BLOCK_TIME	( 5000 )
+
+/* Include support for LLMNR: Link-local Multicast Name Resolution
+(non-Microsoft) */
+#define ipconfigUSE_LLMNR					( 0 )
+
+/* Include support for NBNS: NetBIOS Name Service (Microsoft) */
+#define ipconfigUSE_NBNS					( 0 )
+
+/* Include support for DNS caching.  For TCP, having a small DNS cache is very
+useful.  When a cache is present, ipconfigDNS_REQUEST_ATTEMPTS can be kept low
+and also DNS may use small timeouts.  If a DNS reply comes in after the DNS
+socket has been destroyed, the result will be stored into the cache.  The next
+call to FreeRTOS_gethostbyname() will return immediately, without even creating
+a socket. */
+#define ipconfigUSE_DNS_CACHE				( 1 )
+#define ipconfigDNS_CACHE_NAME_LENGTH		( 16 )
+#define ipconfigDNS_CACHE_ENTRIES			( 4 )
+#define ipconfigDNS_REQUEST_ATTEMPTS		( 2 )
 
 /* The IP stack executes it its own task (although any application task can make
 use of its services through the published sockets API). ipconfigUDP_TASK_PRIORITY
@@ -17,23 +124,25 @@ configMAX_PRIORITIES is a standard FreeRTOS configuration parameter defined in
 FreeRTOSConfig.h, not FreeRTOSIPConfig.h. Consideration needs to be given as to
 the priority assigned to the task executing the IP stack relative to the
 priority assigned to tasks that use the IP stack. */
-#define ipconfigUDP_TASK_PRIORITY			( configMAX_PRIORITIES - 2 )
+#define ipconfigIP_TASK_PRIORITY			( configMAX_PRIORITIES - 2 )
 
-/* The size, in words (not bytes), of the stack allocated to the FreeRTOS+UDP
+/* The size, in words (not bytes), of the stack allocated to the FreeRTOS+TCP
 task.  This setting is less important when the FreeRTOS Win32 simulator is used
 as the Win32 simulator only stores a fixed amount of information on the task
 stack.  FreeRTOS includes optional stack overflow detection, see:
 http://www.freertos.org/Stacks-and-stack-overflow-checking.html */
-#define ipconfigUDP_TASK_STACK_SIZE_WORDS	( configMINIMAL_STACK_SIZE * 3 )
+#define ipconfigIP_TASK_STACK_SIZE_WORDS	( configMINIMAL_STACK_SIZE * 5 )
 
-/* ipconfigRAND32() is called by the IP stack to generate a random number that
-is then used as a DHCP transaction number.  Random number generation is performed
-via this macro to allow applications to use their own random number generation
-method.  For example, it might be possible to generate a random number by
-sampling noise on an analogue input. */
-#define ipconfigRAND32()	1
+/* ipconfigRAND32() is called by the IP stack to generate random numbers for
+things such as a DHCP transaction number or initial sequence number.  Random
+number generation is performed via this macro to allow applications to use their
+own random number generation method.  For example, it might be possible to
+generate a random number by sampling noise on an analogue input. */
+extern UBaseType_t uxRand();
+//#define ipconfigRAND32()	uxRand()
+#define ipconfigRAND32()	(1)
 
-/* If ipconfigUSE_NETWORK_EVENT_HOOK is set to 1 then FreeRTOS+UDP will call the
+/* If ipconfigUSE_NETWORK_EVENT_HOOK is set to 1 then FreeRTOS+TCP will call the
 network event hook at the appropriate times.  If ipconfigUSE_NETWORK_EVENT_HOOK
 is not set to 1 then the network event hook will never be called.  See
 http://www.FreeRTOS.org/FreeRTOS-Plus/FreeRTOS_Plus_UDP/API/vApplicationIPNetworkEventHook.shtml
@@ -51,17 +160,17 @@ all the network buffers are in use and the tasks that process (and subsequently
 free) the network buffers are themselves blocked waiting for a network buffer.
 ipconfigMAX_SEND_BLOCK_TIME_TICKS is specified in RTOS ticks.  A time in
 milliseconds can be converted to a time in ticks by dividing the time in
-milliseconds by portTICK_RATE_MS. */
-#define ipconfigMAX_SEND_BLOCK_TIME_TICKS ( 20 / portTICK_RATE_MS )
+milliseconds by portTICK_PERIOD_MS. */
+#define ipconfigUDP_MAX_SEND_BLOCK_TIME_TICKS ( 5000 / portTICK_PERIOD_MS )
 
-/* If ipconfigUSE_DHCP is 1 then FreeRTOS+UDP will attempt to retrieve an IP
+/* If ipconfigUSE_DHCP is 1 then FreeRTOS+TCP will attempt to retrieve an IP
 address, netmask, DNS server address and gateway address from a DHCP server.  If
-ipconfigUSE_DHCP is 0 then FreeRTOS+UDP will use a static IP address.  The
+ipconfigUSE_DHCP is 0 then FreeRTOS+TCP will use a static IP address.  The
 stack will revert to using the static IP address even when ipconfigUSE_DHCP is
 set to 1 if a valid configuration cannot be obtained from a DHCP server for any
 reason.  The static configuration used is that passed into the stack by the
 FreeRTOS_IPInit() function call. */
-#define ipconfigUSE_DHCP	1
+#define ipconfigUSE_DHCP	0
 
 /* When ipconfigUSE_DHCP is set to 1, DHCP requests will be sent out at
 increasing time intervals until either a reply is received from a DHCP server
@@ -70,13 +179,7 @@ ipconfigMAXIMUM_DISCOVER_TX_PERIOD.  The IP stack will revert to using the
 static IP address passed as a parameter to FreeRTOS_IPInit() if the
 re-transmission time interval reaches ipconfigMAXIMUM_DISCOVER_TX_PERIOD without
 a DHCP reply being received. */
-#ifdef _WINDOWS_
-	/* The windows simulated time is not real time so the max delay is much
-	shorter. */
-	#define ipconfigMAXIMUM_DISCOVER_TX_PERIOD		( 999 / portTICK_RATE_MS )
-#else
-	#define ipconfigMAXIMUM_DISCOVER_TX_PERIOD		( 120000 / portTICK_RATE_MS )
-#endif /* _WINDOWS_ */
+#define ipconfigMAXIMUM_DISCOVER_TX_PERIOD		( 120000 / portTICK_PERIOD_MS )
 
 /* The ARP cache is a table that maps IP addresses to MAC addresses.  The IP
 stack can only send a UDP message to a remove IP address if it knowns the MAC
@@ -113,17 +216,17 @@ FreeRTOS_indet_addr_quick() are available.  If ipconfigINCLUDE_FULL_INET_ADDR is
 not set to 1 then only FreeRTOS_indet_addr_quick() is available. */
 #define ipconfigINCLUDE_FULL_INET_ADDR	1
 
-/* ipconfigNUM_NETWORK_BUFFERS defines the total number of network buffer that
+/* ipconfigNUM_NETWORK_BUFFER_DESCRIPTORS defines the total number of network buffer that
 are available to the IP stack.  The total number of network buffers is limited
 to ensure the total amount of RAM that can be consumed by the IP stack is capped
 to a pre-determinable value. */
-#define ipconfigNUM_NETWORK_BUFFERS		10
+#define ipconfigNUM_NETWORK_BUFFER_DESCRIPTORS		60
 
 /* A FreeRTOS queue is used to send events from application tasks to the IP
 stack.  ipconfigEVENT_QUEUE_LENGTH sets the maximum number of events that can
 be queued for processing at any one time.  The event queue must be a minimum of
 5 greater than the total number of network buffers. */
-#define ipconfigEVENT_QUEUE_LENGTH		( ipconfigNUM_NETWORK_BUFFERS + 5 )
+#define ipconfigEVENT_QUEUE_LENGTH		( ipconfigNUM_NETWORK_BUFFER_DESCRIPTORS + 5 )
 
 /* The address of a socket is the combination of its IP address and its port
 number.  FreeRTOS_bind() is used to manually allocate a port number to a socket
@@ -140,26 +243,25 @@ aborted. */
 #define ipconfigALLOW_SOCKET_SEND_WITHOUT_BIND 1
 
 /* Defines the Time To Live (TTL) values used in outgoing UDP packets. */
-#define updconfigIP_TIME_TO_LIVE		128
+#define ipconfigUDP_TIME_TO_LIVE		128
+#define ipconfigTCP_TIME_TO_LIVE		128 /* also defined in FreeRTOSIPConfigDefaults.h */
 
-/* If ipconfigCAN_FRAGMENT_OUTGOING_PACKETS is set to 1 then UDP packets that
-contain more data than will fit in a single network frame will be fragmented
-across multiple IP packets.  Also see the ipconfigNETWORK_MTU setting.  If
-ipconfigCAN_FRAGMENT_OUTGOING_PACKETS is 1 then (ipconfigNETWORK_MTU - 28) must
-be divisible by 8.  Setting ipconfigCAN_FRAGMENT_OUTGOING_PACKETS to 1 will
-increase both the code size and execution time. */
-#define ipconfigCAN_FRAGMENT_OUTGOING_PACKETS 0
+/* USE_TCP: Use TCP and all its features */
+#define ipconfigUSE_TCP				( 1 )
+
+/* USE_WIN: Let TCP use windowing mechanism. */
+#define ipconfigUSE_TCP_WIN			( 1 )
 
 /* The MTU is the maximum number of bytes the payload of a network frame can
 contain.  For normal Ethernet V2 frames the maximum MTU is 1500.  Setting a
 lower value can save RAM, depending on the buffer management scheme used.  If
 ipconfigCAN_FRAGMENT_OUTGOING_PACKETS is 1 then (ipconfigNETWORK_MTU - 28) must
 be divisible by 8. */
-#define ipconfigNETWORK_MTU 586
+#define ipconfigNETWORK_MTU		1200
 
 /* Set ipconfigUSE_DNS to 1 to include a basic DNS client/resolver.  DNS is used
 through the FreeRTOS_gethostbyname() API function. */
-#define ipconfigUSE_DNS		1
+#define ipconfigUSE_DNS			1
 
 /* If ipconfigREPLY_TO_INCOMING_PINGS is set to 1 then the IP stack will
 generate replies to incoming ICMP echo (ping) requests. */
@@ -169,14 +271,14 @@ generate replies to incoming ICMP echo (ping) requests. */
 FreeRTOS_SendPingRequest() API function is available. */
 #define ipconfigSUPPORT_OUTGOING_PINGS				1
 
-/* Used for stack testing only, and must be implemented in the network
-interface. */
-#define updconfigLOOPBACK_ETHERNET_PACKETS	0
+/* If ipconfigSUPPORT_SELECT_FUNCTION is set to 1 then the FreeRTOS_select()
+(and associated) API function is available. */
+#define ipconfigSUPPORT_SELECT_FUNCTION				0
 
 /* If ipconfigFILTER_OUT_NON_ETHERNET_II_FRAMES is set to 1 then Ethernet frames
 that are not in Ethernet II format will be dropped.  This option is included for
 potential future IP stack developments. */
-#define ipconfigFILTER_OUT_NON_ETHERNET_II_FRAMES 1
+#define ipconfigFILTER_OUT_NON_ETHERNET_II_FRAMES  1
 
 /* If ipconfigETHERNET_DRIVER_FILTERS_FRAME_TYPES is set to 1 then it is the
 responsibility of the Ethernet interface to filter out packets that are of no
@@ -186,7 +288,43 @@ perform the filtering instead (it is much less efficient for the stack to do it
 because the packet will already have been passed into the stack).  If the
 Ethernet driver does all the necessary filtering in hardware then software
 filtering can be removed by using a value other than 1 or 0. */
-#define ipconfigETHERNET_DRIVER_FILTERS_FRAME_TYPES	2
+#define ipconfigETHERNET_DRIVER_FILTERS_FRAME_TYPES	1
+
+/* The windows simulator cannot really simulate MAC interrupts, and needs to
+block occasionally to allow other tasks to run. */
+#define configWINDOWS_MAC_INTERRUPT_SIMULATOR_DELAY ( 2 / portTICK_PERIOD_MS )
+
+/* Advanced only: in order to access 32-bit fields in the IP packets with
+32-bit memory instructions, all packets will be stored 32-bit-aligned, plus 16-bits.
+This has to do with the contents of the IP-packets: all 32-bit fields are
+32-bit-aligned, plus 16-bit(!) */
+#define ipconfigPACKET_FILLER_SIZE 2
 
 
-#endif /* FREERTOSIPCONFIG_H */
+/* Define the size of the pool of TCP window descriptors.  On the average, each
+TCP socket will use up to 2 x 6 descriptors, meaning that it can have 2 x 6
+outstanding packets (for Rx and Tx).  When using up to 10 TP sockets
+simultaneously, one could define TCP_WIN_SEG_COUNT as 120. */
+#define ipconfigTCP_WIN_SEG_COUNT 240
+
+/* Each TCP socket has a circular buffers for Rx and Tx, which have a fixed
+maximum size.  Define the size of Rx buffer for TCP sockets. */
+#define ipconfigTCP_RX_BUF_LEN			( 1000 )
+
+/* Define the size of Tx buffer for TCP sockets. */
+#define ipconfigTCP_TX_BUF_LEN			( 1000 )
+
+/* When using call-back handlers, the driver may check if the handler points to
+real program memory (RAM or flash) or just has a random non-zero value. */
+#define ipconfigIS_VALID_PROG_ADDRESS(x) ( (x) != NULL )
+
+/* Include support for TCP hang protection.  All sockets in a connecting or
+disconnecting stage will timeout after a period of non-activity. */
+#define ipconfigTCP_HANG_PROTECTION				( 1 )
+#define ipconfigTCP_HANG_PROTECTION_TIME		( 30 )
+
+/* Include support for TCP keep-alive messages. */
+#define ipconfigTCP_KEEP_ALIVE				( 1 )
+#define ipconfigTCP_KEEP_ALIVE_INTERVAL		( 20 ) /* in seconds */
+
+#endif /* FREERTOS_IP_CONFIG_H */

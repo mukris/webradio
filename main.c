@@ -15,7 +15,7 @@
 #include "driverlib/uart.h"
 #include "utils/uartstdio.h"
 #include "FreeRTOS.h"
-#include "FreeRTOS_UDP_IP.h"
+#include "FreeRTOS_IP.h"
 #include "task.h"
 #include "queue.h"
 #include "semphr.h"

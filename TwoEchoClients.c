@@ -83,7 +83,7 @@
 #include "task.h"
 
 /* FreeRTOS+UDP includes. */
-#include "FreeRTOS_UDP_IP.h"
+#include "FreeRTOS_IP.h"
 #include "FreeRTOS_Sockets.h"
 
 /* Small delay used between attempts to obtain a zero copy buffer. */

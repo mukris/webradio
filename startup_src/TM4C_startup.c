@@ -358,6 +358,8 @@ volatile uint32_t psr;/* Program status register. */
     pc = pulFaultStackAddress[ 6 ];
     psr = pulFaultStackAddress[ 7 ];
 
+    UARTprintf("\n\nHardfault EXCEPTION!\n");
+
     /* When the following line is hit, the variables contain the register values. */
     for( ;; )
     {
