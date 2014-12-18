@@ -346,7 +346,7 @@ void ETH_IRQHandler(void)
 {
 	uint32_t ulInterruptCause;
 
-	UARTprintf("ETH interrupt\n");
+	//UARTprintf("ETH interrupt\n");
 
 	ulInterruptCause = EMACIntStatus(EMAC0_BASE, true);
 	EMACIntClear(EMAC0_BASE, ulInterruptCause);
