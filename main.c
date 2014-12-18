@@ -140,6 +140,22 @@ int main(void)
 		;
 }
 
+/*
+ * The following function should be provided by the user and return true if it
+ * matches the domain name.
+ */
+BaseType_t xApplicationDNSQueryHook( const char *pcName )
+{
+	if(memcmp(pcName, "TivaC", 5))
+	{
+		return pdTRUE;
+	}
+	else
+	{
+		return pdFALSE;
+	}
+}
+
 //*****************************************************************************
 //
 // This hook is called by FreeRTOS when an stack overflow error is detected.

@@ -188,8 +188,7 @@ typedef struct xDNSTail
 	#define LLMNR_TTL_VALUE			300000 /* recommended value */
 	#define LLMNR_FLAGS_IS_REPONSE  0x8000
 
-	#include "pack_struct_start.h"
-	struct xLLMNRAnswer
+	typedef struct
 	{
 		uint8_t ucNameCode;
 		uint8_t ucNameOffset;	/* The name is not repeated in the answer, only the offset is given with "0xc0 <offs>" */
@@ -198,9 +197,7 @@ typedef struct xDNSTail
 		uint32_t ulTTL;
 		uint16_t usDataLength;
 		uint32_t ulIPAddress;
-	}
-	#include "pack_struct_end.h"
-	typedef struct xLLMNRAnswer xLLMNRAnswer_t;
+	} __attribute__( (packed) ) xLLMNRAnswer_t;
 
 #endif /* ipconfigUSE_LLMNR == 1 */
 
@@ -216,8 +213,7 @@ typedef struct xDNSTail
 	the query will be responded to with these flags: */
 	#define NBNS_QUERY_RESPONSE_FLAGS	( 0x8500 )
 
-	#include "pack_struct_start.h"
-	struct xNBNSRequest
+	typedef struct xNBNSRequest
 	{
 		uint16_t usRequestId;
 		uint16_t usFlags;
@@ -230,12 +226,9 @@ typedef struct xDNSTail
 		uint8_t ucNameZero;
 		uint16_t usType;
 		uint16_t usClass;
-	}
-	#include "pack_struct_end.h"
-	typedef struct xNBNSRequest xNBNSRequest_t;
+	} __attribute__( (packed) ) xNBNSRequest_t;
 
-	#include "pack_struct_start.h"
-	struct xNBNSAnswer
+	typedef struct xNBNSAnswer
 	{
 		uint16_t usType;
 		uint16_t usClass;
@@ -243,9 +236,7 @@ typedef struct xDNSTail
 		uint16_t usDataLength;
 		uint16_t usNbFlags;		/* NetBIOS flags 0x6000 : IP-address, big-endian */
 		uint32_t ulIPAddress;
-	}
-	#include "pack_struct_end.h"
-	typedef struct xNBNSAnswer xNBNSAnswer_t;
+	} __attribute__( (packed) ) xNBNSAnswer_t;
 
 #endif /* ipconfigUSE_NBNS == 1 */
 
