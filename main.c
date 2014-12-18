@@ -144,9 +144,9 @@ int main(void)
  * The following function should be provided by the user and return true if it
  * matches the domain name.
  */
-BaseType_t xApplicationDNSQueryHook( const char *pcName )
+BaseType_t xApplicationDNSQueryHook(const char *pcName)
 {
-	if(memcmp(pcName, "TivaC", 5))
+	if (memcmp(pcName, "tivac", 5))
 	{
 		return pdTRUE;
 	}
@@ -218,35 +218,34 @@ void vApplicationIPNetworkEventHook(eIPCallbackEvent_t eNetworkEvent)
 }
 /*-----------------------------------------------------------*/
 
+#define vOutputString(msg) UARTprintf(msg)
 /* Called by FreeRTOS+UDP when a reply is received to an outgoing ping request. */
 void vApplicationPingReplyHook(ePingReplyStatus_t eStatus, uint16_t usIdentifier)
 {
-	/*static const char *pcSuccess = "\r\n\r\nPing reply received - ";
-	 static const char *pcInvalidChecksum = "\r\n\r\nPing reply received with invalid checksum - ";
-	 static const char *pcInvalidData = "\r\n\r\nPing reply received with invalid data - ";
-	 static char cMessage[ 50 ];
-	 void vOutputString( const char * const pcMessage );
+	static const char *pcSuccess = "\r\n\r\nPing reply received - ";
+	static const char *pcInvalidChecksum = "\r\n\r\nPing reply received with invalid checksum - ";
+	static const char *pcInvalidData = "\r\n\r\nPing reply received with invalid data - ";
+	static char cMessage[50];
 
-	 switch( eStatus )
-	 {
-	 case eSuccess	:
-	 vOutputString( pcSuccess );
-	 break;
+	switch (eStatus)
+	{
+	case eSuccess:
+		vOutputString(pcSuccess);
+		break;
 
-	 case eInvalidChecksum :
-	 vOutputString( pcInvalidChecksum );
-	 break;
+	case eInvalidChecksum:
+		vOutputString(pcInvalidChecksum);
+		break;
 
-	 case eInvalidData :
-	 vOutputString( pcInvalidData );
-	 break;
+	case eInvalidData:
+		vOutputString(pcInvalidData);
+		break;
 
-	 default :
-	 // It is not possible to get here as all enums have their own case.
-	 break;
-	 }
+	default:
+		// It is not possible to get here as all enums have their own case.
+		break;
+	}
 
-	 sprintf( cMessage, "identifier %d\r\n\r\n", ( int ) usIdentifier );
-	 vOutputString( cMessage);
-	 */
+	sprintf(cMessage, "identifier %d\r\n\r\n", (int) usIdentifier);
+	vOutputString(cMessage);
 }
