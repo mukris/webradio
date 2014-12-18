@@ -1101,6 +1101,27 @@ again:
                 }
 
                 //
+                // Handle the %l command prefix. (%lu, %ld, %lx (%lxip))
+                //
+                case 'l':
+                {
+                	switch(*pcString)
+                	{
+                		case 'x':
+                		case 'X':
+                		case 'u':
+                		case 'd':
+                			goto again;
+
+                		default:
+                			UARTwrite("ERROR", 5);
+                			break;
+                	}
+
+                	break;
+                }
+
+                //
                 // Handle the %x and %X commands.  Note that they are treated
                 // identically; in other words, %X will use lower case letters
                 // for a-f instead of the upper case letters it should use.  We
@@ -1114,6 +1135,22 @@ again:
                     // Get the value from the varargs.
                     //
                     ui32Value = va_arg(vaArgP, uint32_t);
+
+                    // Handle %lxip commands
+                    if(*pcString == 'i' && *(pcString + 1) == 'p')
+                    {
+                    	pcString += 2;
+
+                    	UARTprintf("%u.%u.%u.%u", ui32Value >> 24,
+											(ui32Value >> 16) & 0xff,
+											(ui32Value >> 8) & 0xff,
+											ui32Value & 0xff);
+
+                    	//
+                    	// This command has been handled.
+                    	//
+                    	break;
+                    }
 
                     //
                     // Reset the buffer position.
