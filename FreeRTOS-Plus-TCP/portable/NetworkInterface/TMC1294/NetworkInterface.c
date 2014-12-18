@@ -237,7 +237,8 @@ BaseType_t xNetworkInterfaceInitialise(void)
 	/* Create the event semaphore if it has not already been created. */
 	if (xEMACRxEventSemaphore == NULL)
 	{
-		vSemaphoreCreateBinary(xEMACRxEventSemaphore);
+		//vSemaphoreCreateBinary(xEMACRxEventSemaphore);
+		xEMACRxEventSemaphore = xSemaphoreCreateCounting(configNUM_RX_ETHERNET_DMA_DESCRIPTORS, 0);
 #if ipconfigINCLUDE_EXAMPLE_FREERTOS_PLUS_TRACE_CALLS == 1
 		{
 			/* If the trace recorder code is included name the semaphore for
@@ -392,6 +393,8 @@ void EMAC_NextPacketToRead(xNetworkBufferDescriptor_t *pxNetworkBuffer)
 
 static void prvEMACDeferredInterruptHandlerTask(void *pvParameters)
 {
+	uint8_t *pucTemp;
+	tEMACDMADescriptor * rxDmaDescriptor;
 	xNetworkBufferDescriptor_t *pxNetworkBuffer;
 	xIPStackEvent_t xRxEvent;
 
@@ -400,100 +403,117 @@ static void prvEMACDeferredInterruptHandlerTask(void *pvParameters)
 
 	for (;;)
 	{
-		/* Wait for the EMAC interrupt to indicate that another packet has been
-		 received.  The while() loop is only needed if INCLUDE_vTaskSuspend is
-		 set to 0 in FreeRTOSConfig.h.  If INCLUDE_vTaskSuspend is set to 1
-		 then portMAX_DELAY would be an indefinite block time and
-		 xSemaphoreTake() would only return when the semaphore was actually
-		 obtained. */
-		while ( xSemaphoreTake(xEMACRxEventSemaphore, portMAX_DELAY) == pdFALSE)
-			;
+		xSemaphoreTake(xEMACRxEventSemaphore, portMAX_DELAY);
 
-		/* At least one packet has been received. */
-		while (!(rxDmaDescriptors[rxDmaDescriptorsIndex].ui32CtrlStatus & DES0_RX_CTRL_OWN))
+		rxDmaDescriptor = getNextRxDmaDescriptor();
+
+		pxNetworkBuffer = pxGetNetworkBufferWithDescriptor( ipTOTAL_ETHERNET_FRAME_SIZE, (TickType_t) 0);
+
+		pucTemp = pxNetworkBuffer->pucEthernetBuffer;
+		pxNetworkBuffer->pucEthernetBuffer = rxDmaDescriptor->pvBuffer1;
+		pxNetworkBuffer->xDataLength = ((rxDmaDescriptor->ui32CtrlStatus & DES0_RX_STAT_FRAME_LENGTH_M)
+				>> DES0_RX_STAT_FRAME_LENGTH_S);
+		rxDmaDescriptor->pvBuffer1 = pucTemp;
+		rxDmaDescriptor->ui32CtrlStatus = DES0_RX_CTRL_OWN;
+
+		*((xNetworkBufferDescriptor_t **) ((pxNetworkBuffer->pucEthernetBuffer - ipBUFFER_PADDING))) = pxNetworkBuffer;
+
+		if (eConsiderFrameForProcessing(pxNetworkBuffer->pucEthernetBuffer) == eProcessBuffer)
 		{
-			/* The buffer filled by the DMA is going to be passed into the IP
-			 stack.  Allocate another buffer for the DMA descriptor. */
-			pxNetworkBuffer = pxGetNetworkBufferWithDescriptor( ipTOTAL_ETHERNET_FRAME_SIZE, (TickType_t) 0);
+			xRxEvent.eEventType = eNetworkRxEvent;
+			xRxEvent.pvData = (void *) pxNetworkBuffer;
 
-			if (pxNetworkBuffer != NULL)
+			if (xSendEventStructToIPTask(&xRxEvent, 0) == pdFALSE)
 			{
-				/* Swap the buffer just allocated and referenced from the
-				 pxNetworkBuffer with the buffer that has already been filled by
-				 the DMA.  pxNetworkBuffer will then hold a reference to the
-				 buffer that already contains the data without any data having
-				 been copied between buffers. */
-				EMAC_NextPacketToRead(pxNetworkBuffer);
-
-#if ipconfigETHERNET_DRIVER_FILTERS_FRAME_TYPES == 1
-				{
-					if (pxNetworkBuffer->xDataLength > 0)
-					{
-						/* If the frame would not be processed by the IP stack then
-						 don't even bother sending it to the IP stack. */
-						if (eConsiderFrameForProcessing(pxNetworkBuffer->pucEthernetBuffer) != eProcessBuffer)
-						{
-							pxNetworkBuffer->xDataLength = 0;
-						}
-					}
-				}
-#endif
-
-				if (pxNetworkBuffer->xDataLength > 0)
-				{
-					/* Store a pointer to the network buffer structure in the
-					 padding	space that was left in front of the Ethernet frame.
-					 The pointer	is needed to ensure the network buffer structure
-					 can be located when it is time for it to be freed if the
-					 Ethernet frame gets	used as a zero copy buffer. */
-					/**((xNetworkBufferDescriptor_t **) ((pxNetworkBuffer->pucEthernetBuffer - ipBUFFER_PADDING))) =
-					 pxNetworkBuffer;*/
-
-					/* Data was received and stored.  Send it to the IP task
-					 for processing. */
-					xRxEvent.eEventType = eNetworkRxEvent;
-					xRxEvent.pvData = (void *) pxNetworkBuffer;
-					if ( xQueueSendToBack(xNetworkEventQueue, &xRxEvent, (TickType_t ) 0) == pdFALSE)
-					{
-						/* The buffer could not be sent to the IP task so the
-						 buffer must be released. */
-						vReleaseNetworkBufferAndDescriptor(pxNetworkBuffer);
-						iptraceETHERNET_RX_EVENT_LOST();
-					}
-					else
-					{
-						iptraceNETWORK_INTERFACE_RECEIVE();
-					}
-				}
-				else
-				{
-					/* The buffer does not contain any data so there is no
-					 point sending it to the IP task.  Just release it. */
-					vReleaseNetworkBufferAndDescriptor(pxNetworkBuffer);
-					iptraceETHERNET_RX_EVENT_LOST();
-				}
-			}
-			else
-			{
-				iptraceETHERNET_RX_EVENT_LOST();
-			}
-
-			/*
-			 * Now that we are finished dealing with this descriptor, hand
-			 * it back to the hardware. Note that we assume
-			 * ApplicationProcessFrame() is finished with the buffer at this point
-			 * so it is safe to reuse.
-			 */
-			rxDmaDescriptors[rxDmaDescriptorsIndex].ui32CtrlStatus = DES0_RX_CTRL_OWN;
-
-			/* Move on to the next descriptor in the chain. */
-			rxDmaDescriptorsIndex++;
-
-			if (rxDmaDescriptorsIndex == configNUM_RX_ETHERNET_DMA_DESCRIPTORS)
-			{
-				rxDmaDescriptorsIndex = 0;
+				vReleaseNetworkBufferAndDescriptor(pxNetworkBuffer);
+				UARTprintf("Rx event lost\n");
 			}
 		}
+		else
+		{
+			vReleaseNetworkBufferAndDescriptor(pxNetworkBuffer);
+		}
+
+//		/* At least one packet has been received. */
+//		while (!(HANDLED_BY_DMA((&rxDmaDescriptors[rxDmaDescriptorsIndex]))))
+//		{
+//			/* The buffer filled by the DMA is going to be passed into the IP
+//			 stack.  Allocate another buffer for the DMA descriptor. */
+//			pxNetworkBuffer = pxGetNetworkBufferWithDescriptor( ipTOTAL_ETHERNET_FRAME_SIZE, (TickType_t) 0);
+//
+//			if (pxNetworkBuffer != NULL)
+//			{
+//				/* Swap the buffer just allocated and referenced from the
+//				 pxNetworkBuffer with the buffer that has already been filled by
+//				 the DMA.  pxNetworkBuffer will then hold a reference to the
+//				 buffer that already contains the data without any data having
+//				 been copied between buffers. */
+//				EMAC_NextPacketToRead(pxNetworkBuffer);
+//
+//#if ipconfigETHERNET_DRIVER_FILTERS_FRAME_TYPES == 1
+//				{
+//					if (pxNetworkBuffer->xDataLength > 0)
+//					{
+//						/* If the frame would not be processed by the IP stack then
+//						 don't even bother sending it to the IP stack. */
+//						if (eConsiderFrameForProcessing(pxNetworkBuffer->pucEthernetBuffer) != eProcessBuffer)
+//						{
+//							pxNetworkBuffer->xDataLength = 0;
+//						}
+//					}
+//				}
+//#endif
+//
+//				if (pxNetworkBuffer->xDataLength > 0)
+//				{
+//					/* Store a pointer to the network buffer structure in the
+//					 padding	space that was left in front of the Ethernet frame.
+//					 The pointer	is needed to ensure the network buffer structure
+//					 can be located when it is time for it to be freed if the
+//					 Ethernet frame gets	used as a zero copy buffer. */
+//					/**((xNetworkBufferDescriptor_t **) ((pxNetworkBuffer->pucEthernetBuffer - ipBUFFER_PADDING))) =
+//					 pxNetworkBuffer;*/
+//
+//					/* Data was received and stored.  Send it to the IP task
+//					 for processing. */
+//					xRxEvent.eEventType = eNetworkRxEvent;
+//					xRxEvent.pvData = (void *) pxNetworkBuffer;
+//					if ( xQueueSendToBack(xNetworkEventQueue, &xRxEvent, (TickType_t ) 0) == pdFALSE)
+//					{
+//						/* The buffer could not be sent to the IP task so the
+//						 buffer must be released. */
+//						vReleaseNetworkBufferAndDescriptor(pxNetworkBuffer);
+//						iptraceETHERNET_RX_EVENT_LOST();
+//					}
+//					else
+//					{
+//						iptraceNETWORK_INTERFACE_RECEIVE();
+//					}
+//				}
+//				else
+//				{
+//					/* The buffer does not contain any data so there is no
+//					 point sending it to the IP task.  Just release it. */
+//					vReleaseNetworkBufferAndDescriptor(pxNetworkBuffer);
+//					iptraceETHERNET_RX_EVENT_LOST();
+//				}
+//			}
+//			else
+//			{
+//				iptraceETHERNET_RX_EVENT_LOST();
+//			}
+//
+//			/*
+//			 * Now that we are finished dealing with this descriptor, hand
+//			 * it back to the hardware. Note that we assume
+//			 * ApplicationProcessFrame() is finished with the buffer at this point
+//			 * so it is safe to reuse.
+//			 */
+//			rxDmaDescriptors[rxDmaDescriptorsIndex].ui32CtrlStatus = DES0_RX_CTRL_OWN;
+//
+//			/* Move on to the next descriptor in the chain. */
+//			getNextRxDmaDescriptor();
+//		}
 	}
 }
 /*-----------------------------------------------------------*/
