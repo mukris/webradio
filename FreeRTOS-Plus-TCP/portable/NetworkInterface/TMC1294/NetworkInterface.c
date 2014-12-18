@@ -76,15 +76,16 @@
 #include "inc/hw_emac.h"
 #include "inc/hw_memmap.h"
 
-/*-----------------------------------------------------------*/
+#include "utils/uartstdio.h"
 
+/*-----------------------------------------------------------*/
 
 /*-----------------------------------------------------------*/
 
 static tEMACDMADescriptor rxDmaDescriptors[configNUM_RX_ETHERNET_DMA_DESCRIPTORS];
 static tEMACDMADescriptor txDmaDescriptors[configNUM_TX_ETHERNET_DMA_DESCRIPTORS];
 static uint32_t rxDmaDescriptorsIndex;
-static uint32_t txDMADescriptorsIndex;
+static uint32_t txDmaDescriptorsIndex;
 
 /* First statically allocate the buffers, ensuring an additional ipBUFFER_PADDING
  bytes are allocated to each buffer. This example makes no effort to align
@@ -95,8 +96,6 @@ static uint32_t txDMADescriptorsIndex;
 #define BUFFER_SIZE ( ipTOTAL_ETHERNET_FRAME_SIZE + ipBUFFER_PADDING )
 #define BUFFER_SIZE_ROUNDED_UP ( ( BUFFER_SIZE + 7 ) & ~0x07UL )
 static uint8_t rxBuffers[ipconfigNUM_NETWORK_BUFFER_DESCRIPTORS][BUFFER_SIZE_ROUNDED_UP];
-
-#define RX_BUFFER_SIZE ( BUFFER_SIZE - ipBUFFER_PADDING )
 
 /* The queue used to communicate Ethernet events to the IP task. */
 extern xQueueHandle xNetworkEventQueue;
@@ -111,6 +110,28 @@ static xSemaphoreHandle xEMACRxEventSemaphore = NULL;
 static void prvEMACDeferredInterruptHandlerTask(void *pvParameters);
 
 static void initDescriptors(uint32_t ui32Base);
+
+static tEMACDMADescriptor * getNextTxDmaDescriptor(void)
+{
+	txDmaDescriptorsIndex++;
+	if (txDmaDescriptorsIndex == configNUM_TX_ETHERNET_DMA_DESCRIPTORS)
+	{
+		txDmaDescriptorsIndex = 0;
+	}
+	return &txDmaDescriptors[txDmaDescriptorsIndex];
+}
+
+static tEMACDMADescriptor * getNextRxDmaDescriptor(void)
+{
+	rxDmaDescriptorsIndex++;
+	if (rxDmaDescriptorsIndex == configNUM_RX_ETHERNET_DMA_DESCRIPTORS)
+	{
+		rxDmaDescriptorsIndex = 0;
+	}
+	return &rxDmaDescriptors[rxDmaDescriptorsIndex];
+}
+
+#define HANDLED_BY_DMA(dmaDescriptor) (dmaDescriptor->ui32CtrlStatus & DES0_TX_CTRL_OWN)
 
 /*-----------------------------------------------------------*/
 
@@ -260,34 +281,37 @@ BaseType_t xNetworkInterfaceInitialise(void)
 
 BaseType_t xNetworkInterfaceOutput(xNetworkBufferDescriptor_t * const pxNetworkBuffer, BaseType_t bReleaseAfterSend)
 {
-	configASSERT( xIsCallingFromISRTask() == pdTRUE );
-	iptraceNETWORK_INTERFACE_TRANSMIT();
+	tEMACDMADescriptor * txDmaDescriptor;
+	configASSERT( xIsCallingFromISRTask() == pdTRUE );iptraceNETWORK_INTERFACE_TRANSMIT();
 
-	//
+	txDmaDescriptor = getNextTxDmaDescriptor();
+
 	// Wait for the transmit descriptor to free up.
-	//
-	while (txDmaDescriptors[txDMADescriptorsIndex].ui32CtrlStatus & DES0_TX_CTRL_OWN)
+	while (HANDLED_BY_DMA(txDmaDescriptor))
+		;
+
+	/* Further, this example assumes the DMADescriptor_t type has a member
+	 called pucEthernetBuffer that points to the buffer the DMA will transmit, and
+	 a member called xDataLength that holds the length of the data the DMA will
+	 transmit. If BufferAllocation_2.c is being used then the DMA descriptor may
+	 still be pointing to the buffer it last transmitted.  If this is the case
+	 then the old buffer must be released (returned to the TCP/IP stack) before
+	 descriptor is updated to point to the new data waiting to be transmitted. */
+	if (txDmaDescriptor->pvBuffer1 != NULL)
 	{
-		//
-		// Spin and waste time.
-		//
+		/* Note this is releasing just an Ethernet buffer, not a network buffer
+		 descriptor as the descriptor has already been released. */
+		//vNetworkBufferRelease(txDmaDescriptor->pvBuffer1);
 	}
-	//
-	// Move to the next descriptor.
-	//
-	txDMADescriptorsIndex++;
-	if (txDMADescriptorsIndex == configNUM_TX_ETHERNET_DMA_DESCRIPTORS)
-	{
-		txDMADescriptorsIndex = 0;
-	}
+
 	//
 	// Fill in the packet size and pointer, and tell the transmitter to start
 	// work.
 	//
-	txDmaDescriptors[txDMADescriptorsIndex].ui32Count = (DES1_TX_CTRL_BUFF1_SIZE_M
+	txDmaDescriptor->ui32Count = (DES1_TX_CTRL_BUFF1_SIZE_M
 			& (pxNetworkBuffer->xDataLength << DES1_TX_CTRL_BUFF1_SIZE_S));
-	txDmaDescriptors[txDMADescriptorsIndex].pvBuffer1 = pxNetworkBuffer->pucEthernetBuffer;
-	txDmaDescriptors[txDMADescriptorsIndex].ui32CtrlStatus = (DES0_TX_CTRL_LAST_SEG | DES0_TX_CTRL_FIRST_SEG |
+	txDmaDescriptor->pvBuffer1 = pxNetworkBuffer->pucEthernetBuffer;
+	txDmaDescriptor->ui32CtrlStatus = (DES0_TX_CTRL_LAST_SEG | DES0_TX_CTRL_FIRST_SEG |
 	DES0_TX_CTRL_INTERRUPT | DES0_TX_CTRL_IP_ALL_CKHSUMS |
 	DES0_TX_CTRL_CHAINED | DES0_TX_CTRL_OWN);
 
@@ -505,10 +529,12 @@ static void initDescriptors(uint32_t ui32Base)
 	for (i = 0; i < configNUM_RX_ETHERNET_DMA_DESCRIPTORS; i++)
 	{
 		rxDmaDescriptors[i].ui32CtrlStatus = 0;
-		rxDmaDescriptors[i].ui32Count = (DES1_RX_CTRL_CHAINED | (RX_BUFFER_SIZE << DES1_RX_CTRL_BUFF1_SIZE_S));
+		rxDmaDescriptors[i].ui32Count = (DES1_RX_CTRL_CHAINED
+				| (ipTOTAL_ETHERNET_FRAME_SIZE << DES1_RX_CTRL_BUFF1_SIZE_S));
 		rxDmaDescriptors[i].DES3.pLink =
 				(i == (configNUM_RX_ETHERNET_DMA_DESCRIPTORS - 1)) ? rxDmaDescriptors : &rxDmaDescriptors[i + 1];
-		rxDmaDescriptors[i].pvBuffer1 = rxBuffers[i];
+		rxDmaDescriptors[i].pvBuffer1 =
+				pxGetNetworkBufferWithDescriptor(ipTOTAL_ETHERNET_FRAME_SIZE, (TickType_t) 0)->pucEthernetBuffer;
 	}
 
 	/* Set the descriptor pointers in the hardware. */
@@ -522,7 +548,7 @@ static void initDescriptors(uint32_t ui32Base)
 	 * transmission we perform will use the correct descriptor.
 	 */
 	rxDmaDescriptorsIndex = 0;
-	txDMADescriptorsIndex = configNUM_TX_ETHERNET_DMA_DESCRIPTORS - 1;
+	txDmaDescriptorsIndex = configNUM_TX_ETHERNET_DMA_DESCRIPTORS - 1;
 }
 /*-----------------------------------------------------------*/
 
