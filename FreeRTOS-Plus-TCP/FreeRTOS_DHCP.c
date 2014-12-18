@@ -428,7 +428,7 @@ TickType_t xTimeoutTime = 0;
 	if( xDHCPSocket == NULL )
 	{
 		xDHCPSocket = FreeRTOS_socket( FREERTOS_AF_INET, FREERTOS_SOCK_DGRAM, FREERTOS_IPPROTO_UDP );
-		configASSERT_VOID( ( xDHCPSocket != FREERTOS_INVALID_SOCKET ) );
+		//configASSERT_VOID( ( xDHCPSocket != FREERTOS_INVALID_SOCKET ) );
 
 		/* Ensure the Rx and Tx timeouts are zero as the DHCP executes in the
 		context of the IP task. */
@@ -438,7 +438,7 @@ TickType_t xTimeoutTime = 0;
 		/* Bind to the standard DHCP client port. */
 		xAddress.sin_port = dhcpCLIENT_PORT;
 		xReturn = vSocketBind( xDHCPSocket, &xAddress, sizeof( xAddress ), pdFALSE );
-		configASSERT_VOID( xReturn == 0 );
+		//configASSERT_VOID( xReturn == 0 );
 
 		/* Remove compiler warnings if configASSERT() is not defined. */
 		( void ) xReturn;
