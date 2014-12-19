@@ -143,36 +143,41 @@ void vStartEchoClientTasks( uint16_t usTaskStackSize, UBaseType_t uxTaskPriority
 					NULL );				/* The task handle is not used. */
 
 	/* Create the echo client task that does use the zero copy interface. */
-	xTaskCreate( 	prvZeroCopyEchoClientTask,	/* The function that implements the task. */
-					"Echo1",					/* Just a text name for the task to aid debugging. */
-					usTaskStackSize,			/* The stack size is defined in FreeRTOSIPConfig.h. */
-					NULL,						/* The task parameter, not used in this case. */
-					uxTaskPriority,				/* The priority assigned to the task is defined in FreeRTOSConfig.h. */
-					NULL );						/* The task handle is not used. */
+//	xTaskCreate( 	prvZeroCopyEchoClientTask,	/* The function that implements the task. */
+//					"Echo1",					/* Just a text name for the task to aid debugging. */
+//					usTaskStackSize,			/* The stack size is defined in FreeRTOSIPConfig.h. */
+//					NULL,						/* The task parameter, not used in this case. */
+//					uxTaskPriority,				/* The priority assigned to the task is defined in FreeRTOSConfig.h. */
+//					NULL );						/* The task handle is not used. */
 }
 /*-----------------------------------------------------------*/
-
+#define MAGIC_STRING "### Asteroid game magic string ###"
 static void prvEchoClientTask( void *pvParameters )
 {
 xSocket_t xSocket;
 struct freertos_sockaddr xEchoServerAddress;
-char cTxString[ 25 ], cRxString[ 25 ]; /* Make sure the stack is large enough to hold these.  Turn on stack overflow checking during debug to be sure. */
+char cTxString[ 50 ], cRxString[ 50 ]; /* Make sure the stack is large enough to hold these.  Turn on stack overflow checking during debug to be sure. */
 int32_t lLoopCount = 0UL;
 const int32_t lMaxLoopCount = 50;
 volatile uint32_t ulRxCount = 0UL, ulTxCount = 0UL;
 uint32_t xAddressLength = sizeof( xEchoServerAddress );
+uint32_t localIP, netmask, gateway, dns, broadcast;
 
 	/* Remove compiler warning about unused parameters. */
 	( void ) pvParameters;
 
+	FreeRTOS_GetAddressConfiguration(&localIP, &netmask, &gateway, &dns);
+	broadcast = ( localIP & netmask ) |  ~netmask;
+
 	/* Echo requests are sent to the echo server.  The address of the echo
 	server is configured by the constants configECHO_SERVER_ADDR0 to
 	configECHO_SERVER_ADDR3 in FreeRTOSConfig.h. */
-	xEchoServerAddress.sin_port = FreeRTOS_htons( echoECHO_PORT );
-	xEchoServerAddress.sin_addr = FreeRTOS_inet_addr_quick( configECHO_SERVER_ADDR0,
-															configECHO_SERVER_ADDR1,
-															configECHO_SERVER_ADDR2,
-															configECHO_SERVER_ADDR3 );
+	xEchoServerAddress.sin_port = FreeRTOS_htons( 8765 );
+	xEchoServerAddress.sin_addr = broadcast;
+//	xEchoServerAddress.sin_addr = FreeRTOS_inet_addr_quick( 192,
+//															168,
+//															1,
+//															255 );
 
 	for( ;; )
 	{
@@ -188,7 +193,7 @@ uint32_t xAddressLength = sizeof( xEchoServerAddress );
 		for( lLoopCount = 0; lLoopCount < lMaxLoopCount; lLoopCount++ )
 		{
 			/* Create the string that is sent to the echo server. */
-			sprintf( cTxString, "Message number %u\r\n", ( unsigned int ) ulTxCount );
+			sprintf( cTxString, MAGIC_STRING);
 
 			/* Send the string to the socket.  ulFlags is set to 0, so the zero
 			copy interface is not used.  That means the data from cTxString is
