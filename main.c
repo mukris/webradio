@@ -214,13 +214,10 @@ void vApplicationIPNetworkEventHook(eIPCallbackEvent_t eNetworkEvent)
 
 	if (eNetworkEvent == eNetworkUp)
 	{
-		/* Create the tasks that transmit to and receive from a standard
-		 echo server (see the web documentation for this port) in both
-		 standard and zero copy mode. */
 		if (xTaskAlreadyCreated == pdFALSE)
 		{
-			UARTprintf("Starting Echo tasks\n");
-			vStartEchoClientTasks( mainECHO_CLIENT_TASK_STACK_SIZE, mainECHO_CLIENT_TASK_PRIORITY);
+			UARTprintf("Starting broadcaster task\n");
+			vStartBroadcasterTask(mainECHO_CLIENT_TASK_PRIORITY);
 			xTaskAlreadyCreated = pdTRUE;
 		}
 	}
