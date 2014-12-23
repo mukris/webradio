@@ -925,7 +925,7 @@ xNetworkBufferDescriptor_t *pxResult;
 
 		/* Here a pointer was placed to the network descriptor,
 		As a pointer is dereferenced, make sure it is well aligned */
-		if( ( ( ( uint32_t ) pvBuffer ) & portBYTE_ALIGNMENT_MASK ) == 0 )
+		if( ( ( ( uint32_t ) pucBuffer ) & portBYTE_ALIGNMENT_MASK ) == 0 )
 		{
 			pxResult = * ( ( xNetworkBufferDescriptor_t ** ) pucBuffer );
 		}
