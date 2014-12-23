@@ -156,6 +156,15 @@ BaseType_t xApplicationDNSQueryHook(const char *pcName)
 	}
 }
 
+/*
+ * With this option, the hostname can be registered as well which makes
+ * it easier to lookup a device in a router's list of DHCP clients.
+ */
+const char *pcApplicationHostnameHook( void )
+{
+	return "ConnectedLaunchpad";
+}
+
 //*****************************************************************************
 //
 // This hook is called by FreeRTOS when an stack overflow error is detected.
