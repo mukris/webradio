@@ -94,8 +94,8 @@ static uint32_t txDmaDescriptorsIndex;
  ensure it also ends on an alignment boundary.  Below shows an example assuming
  the buffers must also end on an 8-byte boundary. */
 #define BUFFER_SIZE ( ipTOTAL_ETHERNET_FRAME_SIZE + ipBUFFER_PADDING )
-#define BUFFER_SIZE_ROUNDED_UP ( ( BUFFER_SIZE + 7 ) & ~0x07UL )
-static uint8_t rxBuffers[ipconfigNUM_NETWORK_BUFFER_DESCRIPTORS][BUFFER_SIZE_ROUNDED_UP];
+#define BUFFER_SIZE_ROUNDED_UP ( ( BUFFER_SIZE + portBYTE_ALIGNMENT_MASK ) & ~portBYTE_ALIGNMENT_MASK )
+static uint8_t ucBuffers[ipconfigNUM_NETWORK_BUFFER_DESCRIPTORS][BUFFER_SIZE_ROUNDED_UP] __attribute__((aligned(8)));
 
 /* The semaphore used to wake the deferred interrupt handler task when an Rx
  interrupt is received. */
@@ -544,13 +544,13 @@ void vNetworkInterfaceAllocateRAMToBuffers(
 		 * pucEthernetBuffer is set to point ipBUFFER_PADDING bytes in from the
 		 * beginning of the allocated buffer.
 		 */
-		pxNetworkBuffers[i].pucEthernetBuffer = &(rxBuffers[i][ ipBUFFER_PADDING]);
+		pxNetworkBuffers[i].pucEthernetBuffer = &(ucBuffers[i][ ipBUFFER_PADDING]);
 
 		/*
 		 * The following line is also required, but will not be required in
 		 * future versions.
 		 */
-		*((uint32_t *) &rxBuffers[i][0]) = (uint32_t) &(pxNetworkBuffers[i]);
+		*((uint32_t *) &ucBuffers[i][0]) = (uint32_t) &(pxNetworkBuffers[i]);
 	}
 }
 /*-----------------------------------------------------------*/
