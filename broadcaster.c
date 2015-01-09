@@ -48,7 +48,7 @@ static void prvBroadcasterTask(void *pvParameters)
 	broadcastIP = (localIP & netmask) | ~netmask;
 
 	xBroadcastAddress.sin_port = FreeRTOS_htons(BROADCAST_PORT);
-	xBroadcastAddress.sin_addr = FreeRTOS_htonl(broadcastIP);
+	xBroadcastAddress.sin_addr = broadcastIP;
 
 	/* Create a socket. */
 	xSocket = FreeRTOS_socket( FREERTOS_AF_INET, FREERTOS_SOCK_DGRAM, FREERTOS_IPPROTO_UDP);
