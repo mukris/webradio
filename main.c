@@ -129,8 +129,9 @@ int main(void)
 
 	IntMasterEnable();
 
-	IntPriorityGroupingSet(4);
-	IntPrioritySet(INT_EMAC0_TM4C129, configMAC_INTERRUPT_PRIORITY);
+	//IntPriorityGroupingSet(4);
+	//IntPrioritySet(INT_EMAC0_TM4C129, configMAC_INTERRUPT_PRIORITY);
+	IntPrioritySet(INT_UART0, configUART_INTERRUPT_PRIORITY);
 
 	UARTprintf("--- Starting OS ---\n\n");
 
