@@ -55,6 +55,7 @@
 #define FREERTOS_CONFIG_H
 
 #include "FreeRTOS.h"
+#include "FreeRTOSIPConfig.h"
 
 /*-----------------------------------------------------------
  * Application specific definitions.
@@ -186,5 +187,10 @@ ipconfigUSE_DNS is set to 1 but a DNS server cannot be contacted. */
 #define configNET_MASK1		255
 #define configNET_MASK2		255
 #define configNET_MASK3		0
+
+#define configASSERT(x) {if(!(x)) { \
+							FreeRTOS_debug_printf(("***ASSERT: file: %s, line: %d\n", __FILE__, __LINE__)); \
+							for(;;); \
+						 }}
 
 #endif /* FREERTOS_CONFIG_H */
