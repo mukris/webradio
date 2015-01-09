@@ -110,9 +110,10 @@ to exclude the API function. */
 /* Be ENORMOUSLY careful if you want to modify these two values and make sure
  * you read http://www.freertos.org/a00110.html#kernel_priority first!
  */
-#define configKERNEL_INTERRUPT_PRIORITY         ( 7 << 5 )    /* Priority 7, or 0xE0 as only the top three bits are implemented.  This is the lowest priority. */
-#define configMAX_SYSCALL_INTERRUPT_PRIORITY    ( 5 << 5 )  /* Priority 5, or 0xA0 as only the top three bits are implemented. */
-#define configMAC_INTERRUPT_PRIORITY            ( 4 << 5 )
+#define configKERNEL_INTERRUPT_PRIORITY         ( 7 << 5 )  /* Priority 7, or 0xE0 as only the top three bits are implemented.  This is the lowest priority. */
+#define configMAX_SYSCALL_INTERRUPT_PRIORITY    ( 1 << 5 )  /* Priority 1, or 0x20 as only the top three bits are implemented. */
+#define configMAC_INTERRUPT_PRIORITY            ( 2 << 5 )
+#define configUART_INTERRUPT_PRIORITY           ( 6 << 5 )
 
 /* The LPC1830 Ethernet peripheral uses a DMA to transmit and receive packets.
 The DMA uses a chain of descriptors to reference Ethernet buffers, and provide
