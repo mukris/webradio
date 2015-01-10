@@ -50,17 +50,20 @@ static void prvBroadcasterTask(void *pvParameters)
 	xBroadcastAddress.sin_port = FreeRTOS_htons(BROADCAST_PORT);
 	xBroadcastAddress.sin_addr = broadcastIP;
 
-	/* Create a socket. */
-	xSocket = FreeRTOS_socket( FREERTOS_AF_INET, FREERTOS_SOCK_DGRAM, FREERTOS_IPPROTO_UDP);
-	configASSERT( xSocket != FREERTOS_INVALID_SOCKET );
-
-	/*
-	 * Set a time out so a missing reply does not cause the task to block indefinitely.
-	 */
-	FreeRTOS_setsockopt(xSocket, 0, FREERTOS_SO_RCVTIMEO, &xReceiveTimeOut, sizeof(xReceiveTimeOut));
+	FreeRTOS_debug_printf(("Broadcast address is %lxip\n", FreeRTOS_htonl(broadcastIP)));
 
 	for (;;)
 	{
+		/* Create a socket. */
+		xSocket = FreeRTOS_socket( FREERTOS_AF_INET, FREERTOS_SOCK_DGRAM, FREERTOS_IPPROTO_UDP);
+		configASSERT( xSocket != FREERTOS_INVALID_SOCKET );
+
+		/*
+		 * Set a time out so a missing reply does not cause the task to block indefinitely.
+		 */
+		FreeRTOS_setsockopt(xSocket, 0, FREERTOS_SO_RCVTIMEO, &xReceiveTimeOut, sizeof(xReceiveTimeOut));
+
+		FreeRTOS_debug_printf(("Sending broadcast to %lxip:%d\n", broadcastIP, BROADCAST_PORT));
 		/*
 		 * Send the string to the socket.  ulFlags is set to 0, so the zero
 		 * copy interface is not used.  That means the data from cTxString is
@@ -77,5 +80,7 @@ static void prvBroadcasterTask(void *pvParameters)
 
 		/* Pause for a short while to ensure the network is not too congested. */
 		vTaskDelay(xRepeatRate);
+		/* Close this socket before looping back to create another. */
+		FreeRTOS_closesocket(xSocket);
 	}
 }
