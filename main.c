@@ -219,6 +219,7 @@ void vApplicationIPNetworkEventHook(eIPCallbackEvent_t eNetworkEvent)
 		{
 			UARTprintf("Starting broadcaster task\n");
 			vStartBroadcasterTask(mainECHO_CLIENT_TASK_PRIORITY);
+			vStartTcpServer();
 			xTaskAlreadyCreated = pdTRUE;
 		}
 	}
