@@ -50,7 +50,9 @@ static void prvBroadcasterTask(void *pvParameters)
 	xBroadcastAddress.sin_port = FreeRTOS_htons(BROADCAST_PORT);
 	xBroadcastAddress.sin_addr = broadcastIP;
 
-	FreeRTOS_debug_printf(("Broadcast address is %lxip\n", FreeRTOS_htonl(broadcastIP)));
+	broadcastIP = FreeRTOS_htonl(broadcastIP);
+	FreeRTOS_debug_printf(("Broadcast address is %lxip\n", broadcastIP));
+	FreeRTOS_debug_printf(("Starting to send broadcast UDP to %lxip:%d\n", broadcastIP, BROADCAST_PORT));
 
 	for (;;)
 	{
@@ -58,12 +60,6 @@ static void prvBroadcasterTask(void *pvParameters)
 		xSocket = FreeRTOS_socket( FREERTOS_AF_INET, FREERTOS_SOCK_DGRAM, FREERTOS_IPPROTO_UDP);
 		configASSERT( xSocket != FREERTOS_INVALID_SOCKET );
 
-		/*
-		 * Set a time out so a missing reply does not cause the task to block indefinitely.
-		 */
-		FreeRTOS_setsockopt(xSocket, 0, FREERTOS_SO_RCVTIMEO, &xReceiveTimeOut, sizeof(xReceiveTimeOut));
-
-		FreeRTOS_debug_printf(("Sending broadcast to %lxip:%d\n", broadcastIP, BROADCAST_PORT));
 		/*
 		 * Send the string to the socket.  ulFlags is set to 0, so the zero
 		 * copy interface is not used.  That means the data from cTxString is
