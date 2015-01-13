@@ -51,55 +51,63 @@ const uint8_t ucMACAddress[6] =
 void PinoutSet(void)
 {
 	// Enable all the GPIO peripherals.
-	ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
-	ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOB);
-	ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOC);
-	ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOD);
-	ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOE);
-	ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOF);
-	ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOG);
-	ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOH);
-	ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOJ);
-	ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOK);
-	ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOL);
-	ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOM);
-	ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPION);
-	ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOP);
-	ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOQ);
+	MAP_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
+	MAP_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOB);
+	MAP_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOC);
+	MAP_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOD);
+	MAP_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOE);
+	MAP_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOF);
+	MAP_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOG);
+	MAP_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOH);
+	MAP_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOJ);
+	MAP_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOK);
+	MAP_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOL);
+	MAP_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOM);
+	MAP_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPION);
+	MAP_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOP);
+	MAP_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOQ);
 
 	//
 	// PA0-1 are used for UART0.
 	//
-	ROM_GPIOPinConfigure(GPIO_PA0_U0RX);
-	ROM_GPIOPinConfigure(GPIO_PA1_U0TX);
-	ROM_GPIOPinTypeUART(GPIO_PORTA_BASE, GPIO_PIN_0 | GPIO_PIN_1);
+	MAP_GPIOPinConfigure(GPIO_PA0_U0RX);
+	MAP_GPIOPinConfigure(GPIO_PA1_U0TX);
+	MAP_GPIOPinTypeUART(GPIO_PORTA_BASE, GPIO_PIN_0 | GPIO_PIN_1);
+
+	//
+	// PD0-1 are used for SPI.
+	//
+	MAP_GPIOPinConfigure(GPIO_PD0_SSI2XDAT1);
+	MAP_GPIOPinConfigure(GPIO_PD1_SSI2XDAT0);
+	MAP_GPIOPinConfigure(GPIO_PD3_SSI2CLK);
+	GPIOPinTypeSSI(GPIO_PORTD_BASE, GPIO_PIN_0 | GPIO_PIN_1 | GPIO_INT_PIN_3);
 
 	//
 	// this app wants to configure for ethernet LED function.
 	//
-	ROM_GPIOPinConfigure(GPIO_PF0_EN0LED0);
-	ROM_GPIOPinConfigure(GPIO_PF4_EN0LED1);
+	MAP_GPIOPinConfigure(GPIO_PF0_EN0LED0);
+	MAP_GPIOPinConfigure(GPIO_PF4_EN0LED1);
 
 	GPIOPinTypeEthernetLED(GPIO_PORTF_BASE, GPIO_PIN_0 | GPIO_PIN_4);
 
 	//
 	// PJ0 and J1 are used for user buttons
 	//
-	ROM_GPIOPinTypeGPIOInput(GPIO_PORTJ_BASE, GPIO_PIN_0 | GPIO_PIN_1);
-	ROM_GPIOPinWrite(GPIO_PORTJ_BASE, GPIO_PIN_0 | GPIO_PIN_1, 0);
+	MAP_GPIOPinTypeGPIOInput(GPIO_PORTJ_BASE, GPIO_PIN_0 | GPIO_PIN_1);
+	MAP_GPIOPinWrite(GPIO_PORTJ_BASE, GPIO_PIN_0 | GPIO_PIN_1, 0);
 
 	//
 	// PN0 and PN1 are used for USER LEDs.
 	//
-	ROM_GPIOPinTypeGPIOOutput(GPIO_PORTN_BASE, GPIO_PIN_0 | GPIO_PIN_1);
+	MAP_GPIOPinTypeGPIOOutput(GPIO_PORTN_BASE, GPIO_PIN_0 | GPIO_PIN_1);
 	MAP_GPIOPadConfigSet(GPIO_PORTN_BASE, GPIO_PIN_0 | GPIO_PIN_1,
-	GPIO_STRENGTH_12MA,
+	GPIO_STRENGTH_8MA,
 							GPIO_PIN_TYPE_STD);
 
 	//
 	// Default the LEDs to OFF.
 	//
-	ROM_GPIOPinWrite(GPIO_PORTN_BASE, GPIO_PIN_0 | GPIO_PIN_1, 0);
+	MAP_GPIOPinWrite(GPIO_PORTN_BASE, GPIO_PIN_0 | GPIO_PIN_1, 0);
 }
 
 int main(void)
@@ -133,6 +141,8 @@ int main(void)
 	//IntPrioritySet(INT_EMAC0_TM4C129, configMAC_INTERRUPT_PRIORITY);
 	IntPrioritySet(INT_UART0, configUART_INTERRUPT_PRIORITY);
 
+	vStartRfidTask();
+
 	UARTprintf("--- Starting OS ---\n\n");
 
 	vTaskStartScheduler();
@@ -161,7 +171,7 @@ BaseType_t xApplicationDNSQueryHook(const char *pcName)
  * With this option, the hostname can be registered as well which makes
  * it easier to lookup a device in a router's list of DHCP clients.
  */
-const char *pcApplicationHostnameHook( void )
+const char *pcApplicationHostnameHook(void)
 {
 	return "ConnectedLaunchpad";
 }
