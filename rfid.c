@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "driverlib/gpio.h"
 #include "driverlib/ssi.h"
 #include "driverlib/sysctl.h"
 #include "driverlib/rom.h"
@@ -26,9 +27,11 @@ static void prvRfidTask(void * parameters);
 
 void setChipSelectLow(void)
 {
+	GPIOPinWrite(GPIO_PORTC_BASE, GPIO_PIN_6, 0);
 }
 void setChipSelectHigh(void)
 {
+	GPIOPinWrite(GPIO_PORTC_BASE, GPIO_PIN_6, GPIO_PIN_6);
 }
 
 uint8_t spiTransfer(uint8_t data)
@@ -67,7 +70,7 @@ static void prvRfidTask(void * parameters)
 			uint8_t i;
 			for (i = 0; i < uid.size; i++)
 			{
-				UARTprintf("%d", uid.uidByte[i]);
+				UARTprintf("%x", uid.uidByte[i]);
 			}
 			UARTprintf("\n");
 		}

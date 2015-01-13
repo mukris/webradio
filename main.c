@@ -75,12 +75,13 @@ void PinoutSet(void)
 	MAP_GPIOPinTypeUART(GPIO_PORTA_BASE, GPIO_PIN_0 | GPIO_PIN_1);
 
 	//
-	// PD0-1 are used for SPI.
+	// PD0,1,3 are used for SPI.
 	//
 	MAP_GPIOPinConfigure(GPIO_PD0_SSI2XDAT1);
 	MAP_GPIOPinConfigure(GPIO_PD1_SSI2XDAT0);
 	MAP_GPIOPinConfigure(GPIO_PD3_SSI2CLK);
 	GPIOPinTypeSSI(GPIO_PORTD_BASE, GPIO_PIN_0 | GPIO_PIN_1 | GPIO_INT_PIN_3);
+	GPIOPinTypeGPIOOutput(GPIO_PORTC_BASE, GPIO_PIN_6);
 
 	//
 	// this app wants to configure for ethernet LED function.
@@ -101,7 +102,7 @@ void PinoutSet(void)
 	//
 	MAP_GPIOPinTypeGPIOOutput(GPIO_PORTN_BASE, GPIO_PIN_0 | GPIO_PIN_1);
 	MAP_GPIOPadConfigSet(GPIO_PORTN_BASE, GPIO_PIN_0 | GPIO_PIN_1,
-	GPIO_STRENGTH_8MA,
+	GPIO_STRENGTH_4MA,
 							GPIO_PIN_TYPE_STD);
 
 	//
