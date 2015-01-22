@@ -14,10 +14,13 @@
 /* FreeRTOS includes. */
 #include "FreeRTOS.h"
 #include "task.h"
+#include "queue.h"
 
 #include "utils/MFRC552.h"
+#include "utils/uartstdio.h"
+#include "rfid.h"
 
-#define STACK_SIZE ( configMINIMAL_STACK_SIZE * 2 )
+#define STACK_SIZE ( configMINIMAL_STACK_SIZE * 3 )
 #define delay(ms) vTaskDelay((TickType_t) (ms) / portTICK_RATE_MS)
 
 extern Uid uid;
@@ -46,6 +49,8 @@ void vStartRfidTask(void)
 {
 	prvSetupSPI();
 
+	rfidEventQueue = xQueueCreate(10, sizeof(RfidMessage));
+
 	xTaskCreate(prvRfidTask, /* The function that implements the task. */
 				"RFID", /* Just a text name for the task to aid debugging. */
 				STACK_SIZE, /* The stack size is defined in FreeRTOSIPConfig.h. */
@@ -56,24 +61,33 @@ void vStartRfidTask(void)
 
 static void prvRfidTask(void * parameters)
 {
+	RfidMessage rfidMessage;
 	MFRC522_PCD_Init();
 
 	for (;;)
 	{
 		// Look for new cards, and select one if present
-		if (!MFRC522_PICC_IsNewCardPresent() || !MFRC522_PICC_ReadCardSerial())
+		if (MFRC522_PICC_IsNewCardPresent() && MFRC522_PICC_ReadCardSerial())
 		{
-			delay(50);
-		}
-		else
-		{
-			uint8_t i;
+			uint32_t i;
+			rfidMessage.size = uid.size;
+
+			for(i = 0; i < 10; i++) {
+				rfidMessage.uidByte[i] = uid.uidByte[i];
+			}
+
+			xQueueSendToBack(rfidEventQueue, &rfidMessage, 10);
+
 			for (i = 0; i < uid.size; i++)
 			{
 				UARTprintf("%x", uid.uidByte[i]);
 			}
 			UARTprintf("\n");
+
+			MFRC522_PICC_HaltA();
 		}
+
+		delay(50);
 	}
 }
 

@@ -12,11 +12,20 @@
 #include "FreeRTOS_Sockets.h"
 #include "NetworkBufferManagement.h"
 
-#define STACK_SIZE ( configMINIMAL_STACK_SIZE * 3 )
+#include "rfid.h"
+
+#define STACK_SIZE ( configMINIMAL_STACK_SIZE * 4 )
 static const TickType_t xTaskDelay = 250 / portTICK_RATE_MS;
 
 static void prvTcpTask(void *pvParameters);
 static void prvCreateTCPServerSocket(void *pvParameters);
+
+typedef struct
+{
+	uint32_t packetHeader;
+	RfidMessage rfidMessage;
+	uint8_t checksum;
+} NetworkRfidMessage;
 
 void vStartTcpServer(void)
 {
@@ -24,7 +33,7 @@ void vStartTcpServer(void)
 				"TcpServer", /* Just a text name for the task to aid debugging. */
 				STACK_SIZE, /* The stack size is defined in FreeRTOSIPConfig.h. */
 				NULL, /* The task parameter, pointer to the connected socket */
-				tskIDLE_PRIORITY + 1, NULL); /* The task handle is not used. */
+				configMAX_PRIORITIES - 3, NULL); /* The task handle is not used. */
 }
 
 static void prvCreateTCPServerSocket(void *pvParameters)
@@ -33,7 +42,7 @@ static void prvCreateTCPServerSocket(void *pvParameters)
 	xSocket_t xListeningSocket, xConnectedSocket;
 	socklen_t xSize = sizeof(xClient);
 	static const TickType_t xReceiveTimeOut = portMAX_DELAY;
-	const BaseType_t xBacklog = 20;
+	const BaseType_t xBacklog = 1;
 
 	/* Attempt to open the socket. */
 	xListeningSocket = FreeRTOS_socket( FREERTOS_AF_INET, FREERTOS_SOCK_STREAM, FREERTOS_IPPROTO_TCP);
@@ -61,7 +70,7 @@ static void prvCreateTCPServerSocket(void *pvParameters)
 	FreeRTOS_bind(xListeningSocket, &xBindAddress, sizeof(xBindAddress));
 
 	/* Set the socket into a listening state so it can accept connections.
-	 The maximum number of simultaneous connections is limited to 20. */
+	 The maximum number of simultaneous connections is limited to 1. */
 	FreeRTOS_listen(xListeningSocket, xBacklog);
 
 	FreeRTOS_debug_printf(("TCP socket listening on port %d\n", FreeRTOS_htons(xBindAddress.sin_port)));
@@ -85,43 +94,68 @@ static void prvCreateTCPServerSocket(void *pvParameters)
 static void prvTcpTask(void *pvParameters)
 {
 	xNetworkBufferDescriptor_t * networBufferDesc;
-	uint8_t * buff;
-	size_t size = strlen("Hello World");
+	//uint8_t * buff;
+	uint8_t buff[16];
+	size_t size = 16;
 	struct freertos_sockaddr xAddress;
 	xSocket_t xSocket = (xSocket_t) pvParameters;
-	xFreeRTOS_Socket_t *pxSocket = ( xFreeRTOS_Socket_t * ) xSocket;
-	FreeRTOS_getremoteaddress( xSocket, &xAddress);
+	xFreeRTOS_Socket_t *pxSocket = (xFreeRTOS_Socket_t *) xSocket;
+	static const TickType_t xReceiveTimeOut = 0;
+	RfidMessage rfidMessage;
+	NetworkRfidMessage networkRfidMessage;
+	uint32_t i;
 
-	FreeRTOS_debug_printf(("Sending Hello World to %lxip:%d\n", FreeRTOS_htonl(xAddress.sin_addr), FreeRTOS_htons(xAddress.sin_port)));
+	FreeRTOS_getremoteaddress(xSocket, &xAddress);
 
-	FreeRTOS_send(xSocket, /* The socket being sent to. */
-					"Hello World", /* The data being sent. */
-					size, /* The remaining length of data to send. */
-					0); /* ulFlags. */
+	FreeRTOS_setsockopt(xSocket, 0, FREERTOS_SO_RCVTIMEO, &xReceiveTimeOut, sizeof(xReceiveTimeOut));
 
-	/* Initiate graceful shutdown. */
-	FreeRTOS_shutdown(xSocket, FREERTOS_SHUT_RDWR);
-
-	networBufferDesc = pxGetNetworkBufferWithDescriptor(size, 0);
-	buff = networBufferDesc->pucEthernetBuffer;
-
-	/* Wait for the socket to disconnect gracefully (indicated by FreeRTOS_recv()
-	 returning a FREERTOS_EINVAL error) before closing the socket. */
-	while (FreeRTOS_recv(xSocket, buff, size, 0) >= 0)
+	for (;;)
 	{
-		/* Wait for shutdown to complete.  If a receive block time is used then
-		 this delay will not be necessary as FreeRTOS_recv() will place the RTOS task
-		 into the Blocked state anyway. */
-		vTaskDelay(xTaskDelay);
+		if (xQueueReceive(rfidEventQueue, &rfidMessage, 10) == pdTRUE)
+		{
+			networkRfidMessage.packetHeader = FreeRTOS_htonl(0xDEADBEEF);
+			//networkRfidMessage.rfidMessage = rfidMessage;
+			memcpy(&networkRfidMessage.rfidMessage, &rfidMessage, sizeof(RfidMessage));
+			networkRfidMessage.checksum = 0;
 
-		/* Note - real applications should implement a timeout here, not just
-		 loop forever. */
+			for (i = 0; i < sizeof(NetworkRfidMessage) - 1; i++)
+			{
+				networkRfidMessage.checksum += *(((uint8_t*) &networkRfidMessage) + i);
+			}
+
+			FreeRTOS_debug_printf(
+					("Sending RFID data to %lxip:%d\n", FreeRTOS_htonl(xAddress.sin_addr), FreeRTOS_htons(xAddress.sin_port)));
+
+			FreeRTOS_send(xSocket, /* The socket being sent to. */
+							&networkRfidMessage, /* The data being sent. */
+							sizeof(NetworkRfidMessage), /* The remaining length of data to send. */
+							0); /* ulFlags. */
+		}
+
+		//networBufferDesc = pxGetNetworkBufferWithDescriptor(size, 0);
+		//buff = networBufferDesc->pucEthernetBuffer;
+
+		/* Wait for the socket to disconnect gracefully (indicated by FreeRTOS_recv()
+		 returning a FREERTOS_EINVAL error) before closing the socket. */
+//		if (FreeRTOS_recv(xSocket, buff, size, 0) < 0)
+//		{
+//			/* Attempt graceful shutdown. */
+//			FreeRTOS_shutdown( xSocket, FREERTOS_SHUT_RDWR );
+//
+//			/* Wait for shutdown to complete.  If a receive block time is used then
+//			 this delay will not be necessary as FreeRTOS_recv() will place the RTOS task
+//			 into the Blocked state anyway. */
+//			vTaskDelay(xTaskDelay);
+//
+//			//vReleaseNetworkBufferAndDescriptor(networBufferDesc);
+//
+//			/* The socket has shut down and is safe to close. */
+//			FreeRTOS_closesocket(xSocket);
+//
+//			vTaskDelete( NULL);
+//			break;
+//		}
+
+		//vReleaseNetworkBufferAndDescriptor(networBufferDesc);
 	}
-
-	vReleaseNetworkBufferAndDescriptor(networBufferDesc);
-
-	/* The socket has shut down and is safe to close. */
-	FreeRTOS_closesocket(xSocket);
-
-	vTaskDelete( NULL );
 }
