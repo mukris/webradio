@@ -18,7 +18,6 @@
 static void prvBroadcasterTask(void *pvParameters);
 
 static TickType_t xRepeatRate = 500 / portTICK_RATE_MS;
-static const TickType_t xReceiveTimeOut = 500 / portTICK_RATE_MS;
 
 void vStartBroadcasterTask(UBaseType_t uxTaskPriority)
 {
