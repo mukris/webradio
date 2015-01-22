@@ -400,6 +400,7 @@ static void prvEMACDeferredInterruptHandlerTask(void *pvParameters)
 	tEMACDMADescriptor * rxDmaDescriptor;
 	xNetworkBufferDescriptor_t *pxNetworkBuffer;
 	xIPStackEvent_t xRxEvent;
+	uint32_t i;
 
 	(void) pvParameters;
 	configASSERT( xEMACRxEventSemaphore );
@@ -409,67 +410,72 @@ static void prvEMACDeferredInterruptHandlerTask(void *pvParameters)
 		// Wait for an incoming packet
 		xSemaphoreTake(xEMACRxEventSemaphore, portMAX_DELAY);
 
-		// Get the DMA descriptor of the received packet
-		rxDmaDescriptor = getNextRxDmaDescriptor();
+		for(i = 0; i < configNUM_RX_ETHERNET_DMA_DESCRIPTORS; i++) {
 
-		// Ensure that the DMA finished working with the buffer
-		// while (HANDLED_BY_DMA(rxDmaDescriptor))
-		;
+			// Get the DMA descriptor of the received packet
+			rxDmaDescriptor = getNextRxDmaDescriptor();
 
-		// The buffer filled by the DMA is going to be passed into the IP stack.
-		// Allocate another buffer for the DMA descriptor.
-		pxNetworkBuffer = pxGetNetworkBufferWithDescriptor( ipTOTAL_ETHERNET_FRAME_SIZE, (TickType_t) 0);
-
-		// We cannot do anything without a buffer...
-		if (pxNetworkBuffer == NULL)
-		{
-			logRX_EVENT_LOST();
-			continue;
-		}
-
-		// Swap the buffer just allocated and referenced from the
-		// pxNetworkBuffer with the buffer that has already been filled by
-		// the DMA. pxNetworkBuffer will then hold a reference to the
-		// buffer that already contains the data without any data having
-		// been copied between buffers.
-		swapReceiveBuffers(rxDmaDescriptor, pxNetworkBuffer);
-
-		// Give the descriptor back to the DMA with the new empty buffer
-		rxDmaDescriptor->ui32CtrlStatus = DES0_RX_CTRL_OWN;
-
-		// Store a pointer to the network buffer structure in the
-		// padding space that was left in front of the Ethernet frame.
-		// The pointer is needed to ensure the network buffer structure
-		// can be located when it is time for it to be freed if the
-		// Ethernet frame gets used as a zero copy buffer.
-		*((xNetworkBufferDescriptor_t **) ((pxNetworkBuffer->pucEthernetBuffer - ipBUFFER_PADDING))) = pxNetworkBuffer;
-
-		// If the frame would not be processed by the IP stack then
-		// don't even bother sending it to the IP stack.
-		if (eConsiderFrameForProcessing(pxNetworkBuffer->pucEthernetBuffer) != eProcessBuffer)
-		{
-			pxNetworkBuffer->xDataLength = 0;
-		}
-
-		if (pxNetworkBuffer->xDataLength > 0)
-		{
-			xRxEvent.eEventType = eNetworkRxEvent;
-			xRxEvent.pvData = (void *) pxNetworkBuffer;
-
-			// Data was received and stored. Send it to the IP task for processing.
-			if (xSendEventStructToIPTask(&xRxEvent, 0) == pdFALSE)
+			// Ensure that the DMA finished working with the buffer
+			if (HANDLED_BY_DMA(rxDmaDescriptor))
 			{
-				// The buffer could not be sent to the IP task so the
-				// buffer must be released.
-				vReleaseNetworkBufferAndDescriptor(pxNetworkBuffer);
-				logRX_EVENT_LOST();
+				continue;
 			}
-		}
-		else
-		{
-			// The buffer does not contain any data so there is no
-			// point sending it to the IP task. Just release it.
-			vReleaseNetworkBufferAndDescriptor(pxNetworkBuffer);
+
+			// The buffer filled by the DMA is going to be passed into the IP stack.
+			// Allocate another buffer for the DMA descriptor.
+			pxNetworkBuffer = pxGetNetworkBufferWithDescriptor( ipTOTAL_ETHERNET_FRAME_SIZE, (TickType_t) 0);
+
+			// We cannot do anything without a buffer...
+			if (pxNetworkBuffer == NULL)
+			{
+				logRX_EVENT_LOST();
+				continue;
+			}
+
+			// Swap the buffer just allocated and referenced from the
+			// pxNetworkBuffer with the buffer that has already been filled by
+			// the DMA. pxNetworkBuffer will then hold a reference to the
+			// buffer that already contains the data without any data having
+			// been copied between buffers.
+			swapReceiveBuffers(rxDmaDescriptor, pxNetworkBuffer);
+
+			// Give the descriptor back to the DMA with the new empty buffer
+			rxDmaDescriptor->ui32CtrlStatus = DES0_RX_CTRL_OWN;
+
+			// Store a pointer to the network buffer structure in the
+			// padding space that was left in front of the Ethernet frame.
+			// The pointer is needed to ensure the network buffer structure
+			// can be located when it is time for it to be freed if the
+			// Ethernet frame gets used as a zero copy buffer.
+			*((xNetworkBufferDescriptor_t **) ((pxNetworkBuffer->pucEthernetBuffer - ipBUFFER_PADDING))) = pxNetworkBuffer;
+
+			// If the frame would not be processed by the IP stack then
+			// don't even bother sending it to the IP stack.
+			if (eConsiderFrameForProcessing(pxNetworkBuffer->pucEthernetBuffer) != eProcessBuffer)
+			{
+				pxNetworkBuffer->xDataLength = 0;
+			}
+
+			if (pxNetworkBuffer->xDataLength > 0)
+			{
+				xRxEvent.eEventType = eNetworkRxEvent;
+				xRxEvent.pvData = (void *) pxNetworkBuffer;
+
+				// Data was received and stored. Send it to the IP task for processing.
+				if (xSendEventStructToIPTask(&xRxEvent, 0) == pdFALSE)
+				{
+					// The buffer could not be sent to the IP task so the
+					// buffer must be released.
+					vReleaseNetworkBufferAndDescriptor(pxNetworkBuffer);
+					logRX_EVENT_LOST();
+				}
+			}
+			else
+			{
+				// The buffer does not contain any data so there is no
+				// point sending it to the IP task. Just release it.
+				vReleaseNetworkBufferAndDescriptor(pxNetworkBuffer);
+			}
 		}
 	}
 }
