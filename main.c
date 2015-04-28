@@ -228,9 +228,10 @@ void vApplicationIPNetworkEventHook(eIPCallbackEvent_t eNetworkEvent)
 	{
 		if (xTaskAlreadyCreated == pdFALSE)
 		{
-			UARTprintf("Starting broadcaster task\n");
-			vStartBroadcasterTask(mainECHO_CLIENT_TASK_PRIORITY);
-			vStartTcpServer();
+			//vStartBroadcasterTask(mainECHO_CLIENT_TASK_PRIORITY);
+			//vStartTcpServer();
+			UARTprintf("Starting Shoutcast task\n");
+			vStartShoutcastReceiver();
 			xTaskAlreadyCreated = pdTRUE;
 		}
 	}
