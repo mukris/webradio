@@ -38,7 +38,7 @@ void vStartShoutcastReceiver(void)
 static void prvShoutcastTask(void *pvParameters)
 {
 	xSocket_t xSocket;
-	struct freertos_sockaddr xClient;
+	struct freertos_sockaddr xServer, xBindAddr;
 	uint16_t port;
 	char url[] = "http://185.33.23.5:80";
 	char hostname[HOST_NAME_MAX_LEN];
@@ -46,11 +46,8 @@ static void prvShoutcastTask(void *pvParameters)
 	char recBuff[REC_BUFF_SIZE];
 	BaseType_t ret;
 
-	parseURL(url, request_header, hostname, &port);
-	//xClient.sin_addr = FreeRTOS_gethostbyname(url[7]);
-
-	xClient.sin_addr = 0;
-	xClient.sin_port = FreeRTOS_htons(1234);
+	xBindAddr.sin_addr = 0;
+	xBindAddr.sin_port = FreeRTOS_htons(1234);
 
 	/* Attempt to open the socket. */
 	xSocket = FreeRTOS_socket( FREERTOS_AF_INET, FREERTOS_SOCK_STREAM, FREERTOS_IPPROTO_TCP);
@@ -58,10 +55,13 @@ static void prvShoutcastTask(void *pvParameters)
 	/* Check the socket was created. */
 	configASSERT(xSocket != FREERTOS_INVALID_SOCKET);
 
-	FreeRTOS_bind(xSocket, &xClient, sizeof(struct freertos_sockaddr));
+	FreeRTOS_bind(xSocket, &xBindAddr, sizeof(struct freertos_sockaddr));
 
-	xClient.sin_addr = FreeRTOS_inet_addr(&url[7]);
-	xClient.sin_port = FreeRTOS_htons(port);
+	parseURL(url, request_header, hostname, &port);
+
+	xServer.sin_addr = FreeRTOS_inet_addr(&url[7]);
+	//xServer.sin_addr = FreeRTOS_gethostbyname("www.google.com");
+	xServer.sin_port = FreeRTOS_htons(port);
 
 	/* If FREERTOS_SO_RCVBUF or FREERTOS_SO_SNDBUF are to be used with
 	 FreeRTOS_setsockopt() to change the buffer sizes from their default then do
@@ -75,7 +75,7 @@ static void prvShoutcastTask(void *pvParameters)
 	/* Set a time out so accept() will just wait for a connection. */
 	FreeRTOS_setsockopt(xSocket, 0, FREERTOS_SO_RCVTIMEO, &xReceiveTimeOut, sizeof(xReceiveTimeOut));
 
-	ret = FreeRTOS_connect(xSocket, &xClient, sizeof(struct freertos_sockaddr));
+	ret = FreeRTOS_connect(xSocket, &xServer, sizeof(struct freertos_sockaddr));
 
 	if (ret == 0)
 	{
