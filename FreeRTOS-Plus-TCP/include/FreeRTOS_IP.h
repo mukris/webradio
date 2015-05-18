@@ -1,5 +1,5 @@
 /*
- * FreeRTOS+TCP Labs Build 141019 (C) 2014 Real Time Engineers ltd.
+ * FreeRTOS+TCP Labs Build 150406 (C) 2015 Real Time Engineers ltd.
  * Authors include Hein Tibosch and Richard Barry
  *
  *******************************************************************************
@@ -44,35 +44,23 @@
  * 1 tab == 4 spaces!
  *
  * http://www.FreeRTOS.org
- * http://www.FreeRTOS.org/udp
+ * http://www.FreeRTOS.org/plus
+ * http://www.FreeRTOS.org/labs
  *
  */
 
 #ifndef FREERTOS_IP_H
 #define FREERTOS_IP_H
 
-/*
- * _RB_ In this and other header files we should strive to have the following ordering:
- *  #defines
- *  Structure/enum defs
- *  Public functions starting 'FreeRTOS_' - with a comment says they are documented on the web site.
- *  Functions that are not file private, but only intended for use by other +TCP files.
- */
-
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-/* Use in FreeRTOSIPConfig.h. */
-#define FREERTOS_LITTLE_ENDIAN	0
-#define FREERTOS_BIG_ENDIAN		1
-
-#include "list.h"
 
 /* Application level configuration options. */
 #include "FreeRTOSIPConfig.h"
 #include "FreeRTOSIPConfigDefaults.h"
 #include "IPTraceMacroDefaults.h"
+#include "list.h"
 
 /* Some constants defining the sizes of several parts of a packet */
 #define ipSIZE_OF_ETH_HEADER			14
@@ -82,28 +70,6 @@ extern "C" {
 #define ipSIZE_OF_UDP_HEADER			8
 #define ipSIZE_OF_TCP_HEADER			20
 
-/* Various return values. */
-#define	FREERTOS_ERRNO_EBADF			9		/* Bad file number */
-#define	FREERTOS_ERRNO_EINTR			4		/* Interrupted system call */
-#define	FREERTOS_ERRNO_EIO				5		/* I/O error */
-#define	FREERTOS_ERRNO_EAGAIN			11		/* Try again, same as EWOULDBLOCK */
-#define	FREERTOS_ERRNO_EWOULDBLOCK		11		/* Operation would block, same EAGAIN */
-#define	FREERTOS_ERRNO_ENOMEM			12		/* Out of memory */
-#define FREERTOS_ERRNO_EINVAL			22		/* Invalid argument */
-												/* accept(): Socket is not listening for connections, or addrlen is invalid (e.g., is negative). */
-#define	FREERTOS_ERRNO_ENOSPC			28		/* Try to send data but buffers are full after timeout */
-#define	FREERTOS_ERRNO_ENOPROTOOPT		92		/* Protocol not available */
-#define FREERTOS_ERRNO_EOPNOTSUPP		95		/* Operation not supported on transport endpoint */
-#define	FREERTOS_ERRNO_EADDRINUSE		98		/* Address already in use */
-#define	FREERTOS_ERRNO_EADDRNOTAVAIL	99		/* Cannot assign requested address */
-#define FREERTOS_ERRNO_ECONNRESET		104		/* Connection reset by peer */
-#define	FREERTOS_ERRNO_ENOBUFS			105		/* No buffer space available */
-#define	FREERTOS_ERRNO_EISCONN			106		/* Transport endpoint is already connected */
-#define	FREERTOS_ERRNO_ENOTCONN			107		/* Transport endpoint is not connected */
-#define	FREERTOS_ERRNO_ETIMEDOUT		110		/* Connection timed out */
-#define	FREERTOS_ERRNO_EALREADY			114		/* Operation already in progress */
-#define	FREERTOS_ERRNO_EINPROGRESS		115		/* Operation now in progress */
-#define	FREERTOS_ERRNO_ECANCELED		125		/* Operation Canceled */
 
 /* The number of octets in the MAC and IP addresses respectively. */
 #define ipMAC_ADDRESS_LENGTH_BYTES ( 6 )
@@ -175,7 +141,7 @@ typedef enum ePING_REPLY_STATUS
 } ePingReplyStatus_t;
 
 /* Endian related definitions. */
-#if( ipconfigBYTE_ORDER == FREERTOS_LITTLE_ENDIAN )
+#if( ipconfigBYTE_ORDER == pdFREERTOS_LITTLE_ENDIAN )
 
 	/* FreeRTOS_htons / FreeRTOS_htonl: some platforms might have built-in versions
 	using a single instruction so allow these versions to be overridden. */
@@ -201,12 +167,12 @@ typedef enum ePING_REPLY_STATUS
 	#define FreeRTOS_htons( x ) ( ( uint16_t ) ( x ) )
 	#define FreeRTOS_htonl( x ) ( ( uint32_t ) ( x ) )
 
-#endif /* ipconfigBYTE_ORDER == FREERTOS_LITTLE_ENDIAN */
+#endif /* ipconfigBYTE_ORDER == pdFREERTOS_LITTLE_ENDIAN */
 
 #define FreeRTOS_ntohs( x ) FreeRTOS_htons( x )
 #define FreeRTOS_ntohl( x ) FreeRTOS_htonl( x )
 
-#if ipconfigHAS_INLINE_FUNCTIONS
+#if( ipconfigHAS_INLINE_FUNCTIONS == 1 )
 
 	static portINLINE int32_t  FreeRTOS_max_int32  (int32_t  a, int32_t  b) { return a >= b ? a : b; }
 	static portINLINE uint32_t FreeRTOS_max_uint32 (uint32_t a, uint32_t b) { return a >= b ? a : b; }

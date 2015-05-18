@@ -1,5 +1,5 @@
 /*
- * FreeRTOS+TCP Labs Build 141019 (C) 2014 Real Time Engineers ltd.
+ * FreeRTOS+TCP Labs Build 150406 (C) 2015 Real Time Engineers ltd.
  * Authors include Hein Tibosch and Richard Barry
  *
  *******************************************************************************
@@ -44,7 +44,8 @@
  * 1 tab == 4 spaces!
  *
  * http://www.FreeRTOS.org
- * http://www.FreeRTOS.org/udp
+ * http://www.FreeRTOS.org/plus
+ * http://www.FreeRTOS.org/labs
  *
  */
 
@@ -58,7 +59,7 @@
 /*
  * NOT A PUBLIC API FUNCTION.
  */
-void vDHCPProcess( BaseType_t xReset, xMACAddress_t *pxMACAddress, uint32_t *pulIPAddress, xNetworkAddressingParameters_t *pxNetworkAddressing );
+void vDHCPProcess( BaseType_t xReset );
 /* Internal call: returns true if socket is the current DHCP socket */
 BaseType_t xIsDHCPSocket( xSocket_t xSocket );
 

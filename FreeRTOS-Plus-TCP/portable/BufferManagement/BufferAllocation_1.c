@@ -1,5 +1,5 @@
 /*
- * FreeRTOS+TCP Labs Build 141019 (C) 2014 Real Time Engineers ltd.
+ * FreeRTOS+TCP Labs Build 150406 (C) 2015 Real Time Engineers ltd.
  * Authors include Hein Tibosch and Richard Barry
  *
  *******************************************************************************
@@ -44,10 +44,10 @@
  * 1 tab == 4 spaces!
  *
  * http://www.FreeRTOS.org
- * http://www.FreeRTOS.org/udp
+ * http://www.FreeRTOS.org/plus
+ * http://www.FreeRTOS.org/labs
  *
  */
-
 
 /******************************************************************************
  *
@@ -81,6 +81,9 @@ be at least this number of buffers available. */
 
 /* A list of free (available) xNetworkBufferDescriptor_t structures. */
 static List_t xFreeBuffersList;
+
+/* Some statistics about the use of buffers. */
+static size_t uxMinimumFreeNetworkBuffers;
 
 /* Declares the pool of xNetworkBufferDescriptor_t structures that are available to the
 system.  All the network buffers referenced from xFreeBuffersList exist in this
@@ -218,6 +221,8 @@ BaseType_t xReturn, x;
 				/* Currently, all buffers are available for use. */
 				vListInsert( &xFreeBuffersList, &( xNetworkBuffers[ x ].xBufferListItem ) );
 			}
+			
+			uxMinimumFreeNetworkBuffers = ipconfigNUM_NETWORK_BUFFER_DESCRIPTORS;
 		}
 	}
 
@@ -238,6 +243,7 @@ xNetworkBufferDescriptor_t *pxGetNetworkBufferWithDescriptor( size_t xRequestedS
 {
 xNetworkBufferDescriptor_t *pxReturn = NULL;
 BaseType_t xInvalid = pdFALSE;
+size_t uxCount;
 
 	/* The current implementation only has a single size memory block, so
 	the requested size parameter is not used (yet). */
@@ -271,6 +277,15 @@ BaseType_t xInvalid = pdFALSE;
 			}
 			else
 			{
+				{
+					/* Reading UBaseType_t, no critical section needed. */
+					uxCount = listCURRENT_LIST_LENGTH( &xFreeBuffersList );
+		
+					if( uxMinimumFreeNetworkBuffers > uxCount )
+					{
+						uxMinimumFreeNetworkBuffers = uxCount;
+					}		
+				}
 				pxReturn->xDataLength = xRequestedSizeBytes;
 
 				#if( ipconfigTCP_IP_SANITY != 0 )
@@ -378,7 +393,6 @@ BaseType_t xListItemAlreadyInFreeList;
 	}
 	/* Ensure the buffer is returned to the list of free buffers before the
 	counting semaphore is 'given' to say a buffer is available. */
-/*	taskENTER_CRITICAL(); */
 	ipconfigBUFFER_ALLOC_LOCK();
 	{
 		{
@@ -389,11 +403,9 @@ BaseType_t xListItemAlreadyInFreeList;
 				vListInsertEnd( &xFreeBuffersList, &( pxNetworkBuffer->xBufferListItem ) );
 			}
 		}
-
-/*		configASSERT( xListItemAlreadyInFreeList == pdFALSE ); */
 	}
 	ipconfigBUFFER_ALLOC_UNLOCK();
-/*	taskEXIT_CRITICAL(); */
+
 	if( xListItemAlreadyInFreeList )
 	{
 		FreeRTOS_debug_printf( ( "vReleaseNetworkBufferAndDescriptor: %p ALREADY RELEASED (now %lu)\n",
@@ -413,7 +425,11 @@ BaseType_t xListItemAlreadyInFreeList;
 }
 /*-----------------------------------------------------------*/
 
-/*#if( ipconfigINCLUDE_TEST_CODE == 1 ) */
+UBaseType_t uxGetMinimumFreeNetworkBuffers( void )
+{
+	return uxMinimumFreeNetworkBuffers;
+}
+/*-----------------------------------------------------------*/
 
 UBaseType_t uxGetNumberOfFreeNetworkBuffers( void )
 {

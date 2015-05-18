@@ -1,5 +1,5 @@
 /*
- * FreeRTOS+TCP Labs Build 141019 (C) 2014 Real Time Engineers ltd.
+ * FreeRTOS+TCP Labs Build 150406 (C) 2015 Real Time Engineers ltd.
  * Authors include Hein Tibosch and Richard Barry
  *
  *******************************************************************************
@@ -44,19 +44,21 @@
  * 1 tab == 4 spaces!
  *
  * http://www.FreeRTOS.org
- * http://www.FreeRTOS.org/udp
+ * http://www.FreeRTOS.org/plus
+ * http://www.FreeRTOS.org/labs
  *
  */
 
 #ifndef FREERTOS_DEFAULT_IP_CONFIG_H
 #define FREERTOS_DEFAULT_IP_CONFIG_H
 
+/* The error numbers defined in this file will be moved to the core FreeRTOS
+code in future versions of FreeRTOS - at which time the following header file
+will be removed. */
+#include "FreeRTOS_errno_TCP.h"
+
 /* This file provides default values for configuration options that are missing
 from the FreeRTOSIPConfig.h configuration header file. */
-
-/* --------------------------------------------------------
- * HT Added some macro defaults for the PLUS-UDP-TCP project
- * -------------------------------------------------------- */
 
 #ifndef ipconfigUSE_TCP
 	#define	ipconfigUSE_TCP						( 1 )
@@ -74,6 +76,8 @@ from the FreeRTOSIPConfig.h configuration header file. */
 	#endif
 
 	#ifndef ipconfigIGNORE_UNKNOWN_PACKETS
+		/* When non-zero, TCP will not send RST packets in reply to
+		TCP packets which are unknown, or out-of-order. */
 		#define ipconfigIGNORE_UNKNOWN_PACKETS	( 0 )
 	#endif
 #endif
@@ -85,7 +89,7 @@ from the FreeRTOSIPConfig.h configuration header file. */
  * This macro will only be used if FreeRTOS_debug_printf() is defined for logging
  */
 #ifndef ipconfigTCP_MAY_LOG_PORT
-#define ipconfigTCP_MAY_LOG_PORT(xPort)			( ( xPort ) != 23 )
+	#define ipconfigTCP_MAY_LOG_PORT(xPort)			( ( xPort ) != 23 )
 #endif
 
 
@@ -104,7 +108,7 @@ from the FreeRTOSIPConfig.h configuration header file. */
  *
  *     #define FreeRTOS_debug_printf( MSG )			my_printf MSG
  *
- * The FreeRTOS_debug_printf() must be thread-safe but does not have to be 
+ * The FreeRTOS_debug_printf() must be thread-safe but does not have to be
  * interrupt-safe.
  */
 #ifdef ipconfigHAS_DEBUG_PRINTF
@@ -377,7 +381,24 @@ from the FreeRTOSIPConfig.h configuration header file. */
 #endif
 
 #ifndef ipconfigHAS_INLINE_FUNCTIONS
-	//#define	ipconfigHAS_INLINE_FUNCTIONS	( 1 )
+	#define	ipconfigHAS_INLINE_FUNCTIONS	( 1 )
+#endif
+
+#ifndef portINLINE
+	#define portINLINE inline
+#endif
+
+#ifndef ipconfigZERO_COPY_TX_DRIVER
+	/* When non-zero, the buffers passed to the SEND routine may be passed
+	to DMA. As soon as sending is ready, the buffers must be released by
+	calling vReleaseNetworkBufferAndDescriptor(), */
+	#define ipconfigZERO_COPY_TX_DRIVER		( 0 )
+#endif
+
+#ifndef ipconfigZERO_COPY_RX_DRIVER
+	/* This define doesn't mean much to the driver, except that it makes
+	sure that pxPacketBuffer_to_NetworkBuffer() will be included. */
+	#define ipconfigZERO_COPY_RX_DRIVER		( 0 )
 #endif
 
 #endif /* FREERTOS_DEFAULT_IP_CONFIG_H */

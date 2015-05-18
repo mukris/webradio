@@ -1,5 +1,5 @@
 /*
- * FreeRTOS+TCP Labs Build 141019 (C) 2014 Real Time Engineers ltd.
+ * FreeRTOS+TCP Labs Build 150406 (C) 2015 Real Time Engineers ltd.
  * Authors include Hein Tibosch and Richard Barry
  *
  *******************************************************************************
@@ -44,7 +44,8 @@
  * 1 tab == 4 spaces!
  *
  * http://www.FreeRTOS.org
- * http://www.FreeRTOS.org/udp
+ * http://www.FreeRTOS.org/plus
+ * http://www.FreeRTOS.org/labs
  *
  */
 
@@ -287,7 +288,7 @@ typedef struct
 	uint16_t usPayloadChecksum;
 } __attribute__( (packed) ) xIPFragmentParameters_t;
 
-#if( ipconfigBYTE_ORDER == FREERTOS_LITTLE_ENDIAN )
+#if( ipconfigBYTE_ORDER == pdFREERTOS_LITTLE_ENDIAN )
 
 	/* Ethernet frame types. */
 	#define ipARP_TYPE	( 0x0608U )
@@ -311,7 +312,7 @@ typedef struct
 	#define ipARP_REQUEST ( 0x0001 )
 	#define ipARP_REPLY ( 0x0002 )
 
-#endif /* ipconfigBYTE_ORDER == FREERTOS_LITTLE_ENDIAN */
+#endif /* ipconfigBYTE_ORDER == pdFREERTOS_LITTLE_ENDIAN */
 
 
 /* For convenience, a MAC address of all zeros and another of all 0xffs are
@@ -423,9 +424,6 @@ eFrameProcessingResult_t eConsiderFrameForProcessing( const uint8_t * const pucE
  * Return the checksum generated over xDataLengthBytes from pucNextData.
  */
 uint16_t usGenerateChecksum( uint32_t ulSum, const uint8_t * pucNextData, BaseType_t xDataLengthBytes );
-
-/* HT Special */
-UBaseType_t uxGetNumberOfFreeNetworkBuffers( void );
 
 /* Socket related private functions. */
 BaseType_t xProcessReceivedUDPPacket( xNetworkBufferDescriptor_t *pxNetworkBuffer, uint16_t usPort );
@@ -579,7 +577,7 @@ typedef struct
 
 	ListItem_t xBoundSocketListItem; /* Used to reference the socket from a bound sockets list. */
 	TickType_t xReceiveBlockTime; /* if recv[to] is called while no data is available, wait this amount of time. Unit in clock-ticks */
-	TickType_t xSendBlockTime; /* if send[to] is called while there is not enoug space to send, wait this amount of time. Unit in clock-ticks */
+	TickType_t xSendBlockTime; /* if send[to] is called while there is not enough space to send, wait this amount of time. Unit in clock-ticks */
 
 	uint16_t usLocPort;		/* Local port on this machine */
 	uint8_t ucSocketOptions;
@@ -640,7 +638,7 @@ uint16_t usGenerateProtocolChecksum( const uint8_t * const pucEthernetBuffer, Ba
  * An Ethernet frame has been updated (maybe it was an ARP request or a PING
  * request?) and is to be sent back to its source.
  */
-void vReturnEthernetFrame( xNetworkBufferDescriptor_t * const pxNetworkBuffer, BaseType_t xReleaseAfterSend );
+void vReturnEthernetFrame( xNetworkBufferDescriptor_t * pxNetworkBuffer, BaseType_t xReleaseAfterSend );
 
 /*
  * The internal version of bind()
@@ -712,7 +710,16 @@ BaseType_t xSendEventStructToIPTask( const xIPStackEvent_t *pxEvent, TickType_t 
  */
 xNetworkBufferDescriptor_t *pxUDPPayloadBuffer_to_NetworkBuffer( void *pvBuffer );
 
-/* 
+#if( ipconfigZERO_COPY_TX_DRIVER != 0 )
+	/*
+	 * For the case where the network driver passes a buffer directly to a DMA
+	 * descriptor, this function can be used to translate a 'network buffer' to
+	 * a 'network buffer descriptor'.
+	 */
+	xNetworkBufferDescriptor_t *pxPacketBuffer_to_NetworkBuffer( void *pvBuffer );
+#endif
+
+/*
  * Internal: Sets a new state for a TCP socket
  * and performs the necessary actions like calling a OnConnected handler
  * to notify the socket owner
@@ -729,7 +736,7 @@ static portINLINE UBaseType_t uxGetRxEventCount( void )
 void FreeRTOS_netstat( void );
 
 /* Returns pdTRUE is this function is called from the IP-task */
-BaseType_t xIsCallingFromISRTask( void );
+BaseType_t xIsCallingFromIPTask( void );
 
 #if( ipconfigSUPPORT_SELECT_FUNCTION == 1 )
 

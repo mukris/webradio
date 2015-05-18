@@ -1,5 +1,5 @@
 /*
- * FreeRTOS+TCP Labs Build 141019 (C) 2014 Real Time Engineers ltd.
+ * FreeRTOS+TCP Labs Build 150406 (C) 2015 Real Time Engineers ltd.
  * Authors include Hein Tibosch and Richard Barry
  *
  *******************************************************************************
@@ -44,7 +44,8 @@
  * 1 tab == 4 spaces!
  *
  * http://www.FreeRTOS.org
- * http://www.FreeRTOS.org/udp
+ * http://www.FreeRTOS.org/plus
+ * http://www.FreeRTOS.org/labs
  *
  */
 
@@ -67,11 +68,11 @@ extern "C" {
  *
  * The target IP address will be 224.0.0.252
  */
-#if( ipconfigBYTE_ORDER == FREERTOS_BIG_ENDIAN )
+#if( ipconfigBYTE_ORDER == pdFREERTOS_BIG_ENDIAN )
 	#define	ipLLMNR_IP_ADDR			0xE00000FC
 #else
 	#define	ipLLMNR_IP_ADDR			0xFC0000E0
-#endif /* ipconfigBYTE_ORDER == FREERTOS_BIG_ENDIAN */
+#endif /* ipconfigBYTE_ORDER == pdFREERTOS_BIG_ENDIAN */
 
 #define	ipLLMNR_PORT	5355 /* Standard LLMNR port. */
 #define	ipDNS_PORT		53	/* Standard DNS port. */

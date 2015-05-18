@@ -288,7 +288,7 @@ BaseType_t xNetworkInterfaceInitialise(void)
 BaseType_t xNetworkInterfaceOutput(xNetworkBufferDescriptor_t * const pxNetworkBuffer, BaseType_t bReleaseAfterSend)
 {
 	tEMACDMADescriptor * txDmaDescriptor;
-	configASSERT( xIsCallingFromISRTask() == pdTRUE ); iptraceNETWORK_INTERFACE_TRANSMIT();
+	configASSERT( xIsCallingFromIPTask() == pdTRUE ); iptraceNETWORK_INTERFACE_TRANSMIT();
 
 	txDmaDescriptor = getNextTxDmaDescriptor();
 
