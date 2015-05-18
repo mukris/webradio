@@ -17,7 +17,7 @@
 #define HOST_NAME_MAX_LEN 128
 #define REQUEST_HEADER_MAX_LEN 200
 
-#define REC_BUFF_SIZE 4096
+#define REC_BUFF_SIZE 256
 #define STACK_SIZE ( configMINIMAL_STACK_SIZE * 80 )
 
 static const TickType_t xTaskDelay = 250 / portTICK_RATE_MS;
