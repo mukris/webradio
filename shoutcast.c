@@ -10,20 +10,31 @@
 #include "FreeRTOS_IP.h"
 #include "FreeRTOS_IP_Private.h"
 #include "FreeRTOS_Sockets.h"
+#include "FreeRTOS_Stream_Buffer.h"
 #include "NetworkBufferManagement.h"
+#include "utils/uartstdio.h"
 
 #define USER_NAME "WEBRADIO"
 #define DIR_MAX_LEN 128
 #define HOST_NAME_MAX_LEN 128
 #define REQUEST_HEADER_MAX_LEN 200
 
-#define REC_BUFF_SIZE 256
+#define REC_BUFF_SIZE 64
+#define RECEIVED_BUFF_SIZE 4096
 #define STACK_SIZE ( configMINIMAL_STACK_SIZE * 80 )
 
 static const TickType_t xTaskDelay = 250 / portTICK_RATE_MS;
-static const TickType_t xReceiveTimeOut = 30000 / portTICK_RATE_MS;
+static const TickType_t xSendTimeOut = 1000 / portTICK_RATE_MS;
+static const TickType_t xReceiveTimeOut = 1000 / portTICK_RATE_MS;
+
+typedef struct
+{
+	uint32_t bitrate;
+	uint32_t metaInt;
+} IcyData;
 
 static void prvShoutcastTask(void *pvParameters);
+void parseHeader(xStreamBuffer * streamBuff, IcyData * icyData);
 void parseURL(char *URL, char *request_header, char *host_name, uint16_t *port);
 
 void vStartShoutcastReceiver(void)
@@ -41,10 +52,22 @@ static void prvShoutcastTask(void *pvParameters)
 	struct freertos_sockaddr xServer, xBindAddr;
 	uint16_t port;
 	char url[] = "http://185.33.23.5:80";
+	//char url[] = "http://50.30.37.166:42000";
 	char hostname[HOST_NAME_MAX_LEN];
 	char request_header[REQUEST_HEADER_MAX_LEN];
-	char recBuff[REC_BUFF_SIZE];
+	uint8_t recBuff[REC_BUFF_SIZE];
+
 	BaseType_t ret;
+	uint8_t header_received = 0;
+	IcyData icyData;
+	char * tempPtr;
+
+	xStreamBuffer * streamBuff;
+	streamBuff = (xStreamBuffer *) pvPortMallocLarge(
+			sizeof( *streamBuff ) - sizeof( streamBuff->ucArray ) + RECEIVED_BUFF_SIZE + 1);
+
+	streamBuff->LENGTH = RECEIVED_BUFF_SIZE;
+	vStreamBufferClear(streamBuff);
 
 	xBindAddr.sin_addr = 0;
 	xBindAddr.sin_port = FreeRTOS_htons(1234);
@@ -74,6 +97,7 @@ static void prvShoutcastTask(void *pvParameters)
 
 	/* Set a time out so accept() will just wait for a connection. */
 	FreeRTOS_setsockopt(xSocket, 0, FREERTOS_SO_RCVTIMEO, &xReceiveTimeOut, sizeof(xReceiveTimeOut));
+	FreeRTOS_setsockopt(xSocket, 0, FREERTOS_SO_SNDTIMEO, &xSendTimeOut, sizeof(xSendTimeOut));
 
 	ret = FreeRTOS_connect(xSocket, &xServer, sizeof(struct freertos_sockaddr));
 
@@ -83,15 +107,36 @@ static void prvShoutcastTask(void *pvParameters)
 
 		for (;;)
 		{
-			ret = FreeRTOS_recv(xSocket, recBuff, REC_BUFF_SIZE, 0);
+			ret = FreeRTOS_recv(xSocket, recBuff, REC_BUFF_SIZE - 1, 0);
 
 			if (ret > 0)
 			{
-				//process data
+				recBuff[ret] = 0;
+				if (!header_received && (tempPtr = strstr((char *) recBuff, "\r\n\r\n")) != NULL)
+				{
+					header_received = 1;
+					UARTprintf("ICY Header received\r\n");
+
+					*((int *) tempPtr) = 0;
+					lStreamBufferAdd(streamBuff, 0, recBuff, ret);
+					parseHeader(streamBuff, &icyData);
+					UARTprintf("ICY bitrate: %d kbps\r\n", icyData.bitrate);
+					UARTprintf("ICY metaInt: %d\r\n", icyData.metaInt);
+				}
+				else
+				{
+					lStreamBufferAdd(streamBuff, 0, recBuff, ret);
+				}
+
 				UARTprintf(".");
+			}
+			else if (ret == 0)
+			{
+				UARTprintf("Received 0 bytes\n");
 			}
 			else
 			{
+				UARTprintf("Receive ERROR %d... shutting down...\n", ret);
 				/* Error (maybe the connected socket already shut down the socket?).
 				 Attempt graceful shutdown. */
 				FreeRTOS_shutdown(xSocket, FREERTOS_SHUT_RDWR);
@@ -119,9 +164,28 @@ static void prvShoutcastTask(void *pvParameters)
 
 	}
 
+	UARTprintf("Dying\r\n\r\n");
 	while (1)
 	{
 
+	}
+}
+
+void parseHeader(xStreamBuffer * streamBuff, IcyData * icyData)
+{
+	uint8_t * buff;
+	char * tempPtr;
+	char * tmp;
+	lStreamBufferGetPtr(streamBuff, &buff);
+	if ((tempPtr = strstr((char *) buff, "icy-metaint:")) != NULL)
+	{
+		tempPtr += strlen("icy-metaint:");
+		icyData->metaInt = strtol(tempPtr, &tmp, 10) << 4;
+	}
+	if ((tempPtr = strstr((char *) buff, "icy-br:")) != NULL)
+	{
+		tempPtr += strlen("icy-br:");
+		icyData->bitrate = strtol(tempPtr, &tmp, 10);
 	}
 }
 
