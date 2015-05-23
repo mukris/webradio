@@ -211,6 +211,7 @@ uint32_t processReceivedData(uint8_t * data, uint32_t len, xStreamBuffer * strea
 			lStreamBufferAdd(streamBuff, 0, data, (uint32_t) tempPtr + 4 - (uint32_t) data);
 
 			parseHeader(streamBuff, icyData);
+			vStreamBufferClear(streamBuff);
 
 			UARTprintf("ICY name: %s\r\n", icyData->name);
 			UARTprintf("ICY bitrate: %d kbps\r\n", icyData->bitrate);
