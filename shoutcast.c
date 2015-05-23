@@ -42,9 +42,15 @@ typedef struct
 static void prvShoutcastTask(void *pvParameters);
 uint32_t processReceivedData(uint8_t * data, uint32_t len, xStreamBuffer * streamBuff, xStreamBuffer * metaBuff,
 								IcyData * icyData);
+static uint32_t getHttpStatusCode(xStreamBuffer * streamBuff);
 void parseMetaInfo(xStreamBuffer * metaBuff, IcyData * icyData);
 void parseHeader(xStreamBuffer * streamBuff, IcyData * icyData);
+void getRequestInfo(char * URL, struct freertos_sockaddr * addr, char * requestHeader);
 void parseURL(char *URL, char *request_header, char *host_name, uint16_t *port);
+
+static void initClientSocket(xSocket_t * socket, uint16_t port);
+static void waitForSocketClose(xSocket_t * socket);
+static xStreamBuffer * createStreamBuffer(uint32_t size);
 
 void vStartShoutcastReceiver(void)
 {
@@ -55,15 +61,23 @@ void vStartShoutcastReceiver(void)
 				configMAX_PRIORITIES - 3, NULL); /* The task handle is not used. */
 }
 
+typedef enum
+{
+	STATE_READY, //
+	STATE_CONNECTING, //
+	STATE_RECEIVING //
+} ReceiverState;
+
 static void prvShoutcastTask(void *pvParameters)
 {
 	xSocket_t xSocket;
-	struct freertos_sockaddr xServer, xBindAddr;
-	uint16_t port;
+	struct freertos_sockaddr xServer;
+
 	char url[] = "http://185.33.23.5:80";
 	//char url[] = "http://50.30.37.166:42000";
-	char hostname[HOST_NAME_MAX_LEN];
-	char request_header[REQUEST_HEADER_MAX_LEN];
+	//char url[] = "http://204.62.13.214:80/musicone/mp3/128k";
+	//char url[] = "http://listen.radionomy.com/PARTYVIBERADIO-Reggae-Roots-Dancehall-Dub";
+	char requestHeader[REQUEST_HEADER_MAX_LEN];
 	uint8_t recBuff[REC_BUFF_SIZE];
 	uint8_t * pRecBuff;
 	int processedBytes;
@@ -71,57 +85,19 @@ static void prvShoutcastTask(void *pvParameters)
 	BaseType_t ret;
 	IcyData icyData;
 
-	xStreamBuffer * streamBuff;
-	streamBuff = (xStreamBuffer *) pvPortMallocLarge(
-			sizeof( *streamBuff ) - sizeof( streamBuff->ucArray ) + STREAM_BUFF_SIZE + 1);
-
-	streamBuff->LENGTH = STREAM_BUFF_SIZE;
-	vStreamBufferClear(streamBuff);
-
-	xStreamBuffer * metaBuff;
-	metaBuff = (xStreamBuffer *) pvPortMallocLarge(
-			sizeof( *metaBuff ) - sizeof( metaBuff->ucArray ) + META_BUFF_SIZE + 1);
-
-	metaBuff->LENGTH = META_BUFF_SIZE;
-	vStreamBufferClear(metaBuff);
+	xStreamBuffer * streamBuff = createStreamBuffer(STREAM_BUFF_SIZE);
+	xStreamBuffer * metaBuff = createStreamBuffer(META_BUFF_SIZE);
 
 	memset(&icyData, 0, sizeof(IcyData));
 
-	xBindAddr.sin_addr = 0;
-	xBindAddr.sin_port = FreeRTOS_htons(1234);
-
-	/* Attempt to open the socket. */
-	xSocket = FreeRTOS_socket( FREERTOS_AF_INET, FREERTOS_SOCK_STREAM, FREERTOS_IPPROTO_TCP);
-
-	/* Check the socket was created. */
-	configASSERT(xSocket != FREERTOS_INVALID_SOCKET);
-
-	FreeRTOS_bind(xSocket, &xBindAddr, sizeof(struct freertos_sockaddr));
-
-	parseURL(url, request_header, hostname, &port);
-
-	xServer.sin_addr = FreeRTOS_inet_addr(&url[7]);
-	//xServer.sin_addr = FreeRTOS_gethostbyname("www.google.com");
-	xServer.sin_port = FreeRTOS_htons(port);
-
-	/* If FREERTOS_SO_RCVBUF or FREERTOS_SO_SNDBUF are to be used with
-	 FreeRTOS_setsockopt() to change the buffer sizes from their default then do
-	 it here!.  (see the FreeRTOS_setsockopt() documentation. */
-
-	/* If ipconfigUSE_TCP_WIN is set to 1 and FREERTOS_SO_WIN_PROPERTIES is to
-	 be used with FreeRTOS_setsockopt() to change the sliding window size from
-	 its default then do it here! (see the FreeRTOS_setsockopt()
-	 documentation. */
-
-	/* Set a time out so accept() will just wait for a connection. */
-	FreeRTOS_setsockopt(xSocket, 0, FREERTOS_SO_RCVTIMEO, &xReceiveTimeOut, sizeof(xReceiveTimeOut));
-	FreeRTOS_setsockopt(xSocket, 0, FREERTOS_SO_SNDTIMEO, &xSendTimeOut, sizeof(xSendTimeOut));
+	getRequestInfo(url, &xServer, requestHeader);
+	initClientSocket(&xSocket, 1234);
 
 	ret = FreeRTOS_connect(xSocket, &xServer, sizeof(struct freertos_sockaddr));
 
 	if (ret == 0)
 	{
-		FreeRTOS_send(xSocket, request_header, strlen(request_header), 0);
+		FreeRTOS_send(xSocket, requestHeader, strlen(requestHeader), 0);
 
 		for (;;)
 		{
@@ -136,8 +112,6 @@ static void prvShoutcastTask(void *pvParameters)
 					ret -= processedBytes;
 					pRecBuff += processedBytes;
 				} while (ret > 0);
-
-				//UARTprintf(".");
 			}
 			else if (ret == 0)
 			{
@@ -157,19 +131,7 @@ static void prvShoutcastTask(void *pvParameters)
 		 socket has shut down (indicated by FreeRTOS_recv() returning a FREERTOS_EINVAL
 		 error before closing the socket). */
 
-		while (FreeRTOS_recv(xSocket, recBuff, REC_BUFF_SIZE, 0) >= 0)
-		{
-			/* Wait for shutdown to complete.  If a receive block time is used then
-			 this delay will not be necessary as FreeRTOS_recv() will place the RTOS task
-			 into the Blocked state anyway. */
-			vTaskDelay(xTaskDelay);
-
-			/* Note - real applications should implement a timeout here, not just
-			 loop forever. */
-		}
-
-		/* Shutdown is complete and the socket can be safely closed. */
-		FreeRTOS_closesocket(xSocket);
+		waitForSocketClose(&xSocket);
 
 	}
 
@@ -274,6 +236,21 @@ uint32_t processReceivedData(uint8_t * data, uint32_t len, xStreamBuffer * strea
 	return len;
 }
 
+static uint32_t getHttpStatusCode(xStreamBuffer * streamBuff)
+{
+	uint8_t * buff;
+	char * tempPtr;
+	char *tmp;
+	uint32_t status = 0;
+	lStreamBufferGetPtr(streamBuff, &buff);
+	if ((tempPtr = strstr((char *) buff, "HTTP/1.")) != NULL)
+	{
+		tempPtr += strlen("HTTP/1.") + 2;
+		return strtol(tempPtr, &tmp, 10);
+	}
+	return status;
+}
+
 void parseHeader(xStreamBuffer * streamBuff, IcyData * icyData)
 {
 	uint8_t * buff;
@@ -336,6 +313,20 @@ void parseMetaInfo(xStreamBuffer * metaBuff, IcyData * icyData)
 	UARTprintf("Title: %s\n", icyData->title);
 }
 
+void getRequestInfo(char * URL, struct freertos_sockaddr * addr, char * requestHeader)
+{
+	uint16_t port;
+	char hostname[HOST_NAME_MAX_LEN];
+	parseURL(URL, requestHeader, hostname, &port);
+
+	addr->sin_addr = FreeRTOS_inet_addr(&URL[7]);
+	if (addr->sin_addr == 0)
+	{
+		addr->sin_addr = FreeRTOS_gethostbyname(hostname);
+	}
+	addr->sin_port = FreeRTOS_htons(port);
+}
+
 void parseURL(char *URL, char *request_header, char *host_name, uint16_t *port)
 {
 	char *url_start, *url_end;
@@ -346,6 +337,12 @@ void parseURL(char *URL, char *request_header, char *host_name, uint16_t *port)
 	url_start = strstr(URL, "http");		// http://urladdr.com
 	url_start += 7;
 	url_end = strstr(url_start, ":");
+
+	if (url_end == NULL)
+	{
+		url_end = strstr(url_start, "/");
+		*port = 80;
+	}
 
 	cnt = 0;
 	do
@@ -375,9 +372,12 @@ void parseURL(char *URL, char *request_header, char *host_name, uint16_t *port)
 
 	*(url_end) = 0;
 
-	/* find port number */
-	url_end++;		// pointer to port number
-	*port = atoi(url_end);
+	if (*port != 80)
+	{
+		/* find port number */
+		url_end++;		// pointer to port number
+		*port = atoi(url_end);
+	}
 
 	/* create request header */
 	strcpy(request_header, "GET ");
@@ -388,5 +388,54 @@ void parseURL(char *URL, char *request_header, char *host_name, uint16_t *port)
 	strcat(request_header, "User-Agent: ");
 	strcat(request_header, USER_NAME);
 	strcat(request_header, "\r\nAccept: */*\r\nIcy-MetaData:1\r\nConnection: close\r\n\r\n");
+}
+
+static void initClientSocket(xSocket_t * socket, uint16_t port)
+{
+	struct freertos_sockaddr xBindAddr;
+	xBindAddr.sin_addr = 0;
+	xBindAddr.sin_port = FreeRTOS_htons(port);
+
+	/* Attempt to open the socket. */
+	*socket = FreeRTOS_socket( FREERTOS_AF_INET, FREERTOS_SOCK_STREAM, FREERTOS_IPPROTO_TCP);
+
+	/* Check the socket was created. */
+	configASSERT(*socket != FREERTOS_INVALID_SOCKET);
+
+	if (port != 0)
+	{
+		FreeRTOS_bind(*socket, &xBindAddr, sizeof(struct freertos_sockaddr));
+	}
+
+	FreeRTOS_setsockopt(*socket, 0, FREERTOS_SO_RCVTIMEO, &xReceiveTimeOut, sizeof(xReceiveTimeOut));
+	FreeRTOS_setsockopt(*socket, 0, FREERTOS_SO_SNDTIMEO, &xSendTimeOut, sizeof(xSendTimeOut));
+}
+
+static void waitForSocketClose(xSocket_t * socket)
+{
+	char temp[10];
+	while (FreeRTOS_recv(*socket, temp, sizeof(temp), 0) >= 0)
+	{
+		/* Wait for shutdown to complete.  If a receive block time is used then
+		 this delay will not be necessary as FreeRTOS_recv() will place the RTOS task
+		 into the Blocked state anyway. */
+		vTaskDelay(xTaskDelay / 10);
+
+		/* Note - real applications should implement a timeout here, not just
+		 loop forever. */
+	}
+
+	/* Shutdown is complete and the socket can be safely closed. */
+	FreeRTOS_closesocket(*socket);
+}
+
+static xStreamBuffer * createStreamBuffer(uint32_t size)
+{
+	xStreamBuffer * buff;
+	buff = (xStreamBuffer *) pvPortMallocLarge(sizeof(*buff) - sizeof(buff->ucArray) + size + 1);
+
+	buff->LENGTH = size;
+	vStreamBufferClear(buff);
+	return buff;
 }
 
