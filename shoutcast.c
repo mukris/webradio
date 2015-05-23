@@ -20,7 +20,8 @@
 #define REQUEST_HEADER_MAX_LEN 200
 
 #define REC_BUFF_SIZE 256
-#define RECEIVED_BUFF_SIZE 4096
+#define STREAM_BUFF_SIZE 4096
+#define META_BUFF_SIZE 512
 #define STACK_SIZE ( configMINIMAL_STACK_SIZE * 80 )
 
 static const TickType_t xTaskDelay = 250 / portTICK_RATE_MS;
@@ -29,11 +30,19 @@ static const TickType_t xReceiveTimeOut = 1000 / portTICK_RATE_MS;
 
 typedef struct
 {
+	char name[128]; // name of the channel
+	char title[128]; // title of the currently playing song
 	uint32_t bitrate;
-	uint32_t metaInt;
+	uint32_t streamBlockSize; // how many bytes of stream data are between two meta data blocks
+	uint32_t metaDataBlockSize; // how many bytes of meta data are between two stream data blocks
+	uint32_t streamBytesUntilMetadata; // how many bytes left from the current stream block
+	uint32_t metaDataBytesUntilStreamData; // how many bytes left from the current meta data block
 } IcyData;
 
 static void prvShoutcastTask(void *pvParameters);
+uint32_t processReceivedData(uint8_t * data, uint32_t len, xStreamBuffer * streamBuff, xStreamBuffer * metaBuff,
+								IcyData * icyData);
+void parseMetaInfo(xStreamBuffer * metaBuff, IcyData * icyData);
 void parseHeader(xStreamBuffer * streamBuff, IcyData * icyData);
 void parseURL(char *URL, char *request_header, char *host_name, uint16_t *port);
 
@@ -56,18 +65,27 @@ static void prvShoutcastTask(void *pvParameters)
 	char hostname[HOST_NAME_MAX_LEN];
 	char request_header[REQUEST_HEADER_MAX_LEN];
 	uint8_t recBuff[REC_BUFF_SIZE];
+	uint8_t * pRecBuff;
+	int processedBytes;
 
 	BaseType_t ret;
-	uint8_t header_received = 0;
 	IcyData icyData;
-	char * tempPtr;
 
 	xStreamBuffer * streamBuff;
 	streamBuff = (xStreamBuffer *) pvPortMallocLarge(
-			sizeof( *streamBuff ) - sizeof( streamBuff->ucArray ) + RECEIVED_BUFF_SIZE + 1);
+			sizeof( *streamBuff ) - sizeof( streamBuff->ucArray ) + STREAM_BUFF_SIZE + 1);
 
-	streamBuff->LENGTH = RECEIVED_BUFF_SIZE;
+	streamBuff->LENGTH = STREAM_BUFF_SIZE;
 	vStreamBufferClear(streamBuff);
+
+	xStreamBuffer * metaBuff;
+	metaBuff = (xStreamBuffer *) pvPortMallocLarge(
+			sizeof( *metaBuff ) - sizeof( metaBuff->ucArray ) + META_BUFF_SIZE + 1);
+
+	metaBuff->LENGTH = META_BUFF_SIZE;
+	vStreamBufferClear(metaBuff);
+
+	memset(&icyData, 0, sizeof(IcyData));
 
 	xBindAddr.sin_addr = 0;
 	xBindAddr.sin_port = FreeRTOS_htons(1234);
@@ -111,24 +129,15 @@ static void prvShoutcastTask(void *pvParameters)
 
 			if (ret > 0)
 			{
-				recBuff[ret] = 0;
-				if (!header_received && (tempPtr = strstr((char *) recBuff, "\r\n\r\n")) != NULL)
+				pRecBuff = recBuff;
+				do
 				{
-					header_received = 1;
-					UARTprintf("ICY Header received\r\n");
+					processedBytes = processReceivedData(pRecBuff, ret, streamBuff, metaBuff, &icyData);
+					ret -= processedBytes;
+					pRecBuff += processedBytes;
+				} while (ret > 0);
 
-					*((int *) tempPtr) = 0;
-					lStreamBufferAdd(streamBuff, 0, recBuff, ret);
-					parseHeader(streamBuff, &icyData);
-					UARTprintf("ICY bitrate: %d kbps\r\n", icyData.bitrate);
-					UARTprintf("ICY metaInt: %d\r\n", icyData.metaInt);
-				}
-				else
-				{
-					lStreamBufferAdd(streamBuff, 0, recBuff, ret);
-				}
-
-				UARTprintf(".");
+				//UARTprintf(".");
 			}
 			else if (ret == 0)
 			{
@@ -171,22 +180,159 @@ static void prvShoutcastTask(void *pvParameters)
 	}
 }
 
+typedef enum
+{
+	STATE_HEADER, //
+	STATE_STREAM_START, //
+	STATE_STREAM, //
+	STATE_META_DATA_START, //
+	STATE_META_DATA
+} IcyParserState;
+
+uint32_t processReceivedData(uint8_t * data, uint32_t len, xStreamBuffer * streamBuff, xStreamBuffer * metaBuff,
+								IcyData * icyData)
+{
+	static IcyParserState state = STATE_HEADER;
+	char * tempPtr;
+	uint32_t partLen;
+
+	data[len] = '\0';
+
+	switch (state)
+	{
+	case STATE_HEADER:
+		if ((tempPtr = strstr((char *) data, "\r\n\r\n")) != NULL)
+		{
+			UARTprintf("ICY Header received\r\n");
+
+			// close the header with '\0' for the parsing to work correctly
+			*((int *) tempPtr) = '\0';
+
+			lStreamBufferAdd(streamBuff, 0, data, (uint32_t) tempPtr + 4 - (uint32_t) data);
+
+			parseHeader(streamBuff, icyData);
+
+			UARTprintf("ICY name: %s\r\n", icyData->name);
+			UARTprintf("ICY bitrate: %d kbps\r\n", icyData->bitrate);
+			UARTprintf("ICY metaDataGap: %d\r\n", icyData->streamBlockSize);
+
+			state = STATE_STREAM_START;
+			return (uint32_t) tempPtr + 4 - (uint32_t) data;
+		}
+		else
+		{
+			lStreamBufferAdd(streamBuff, 0, data, len);
+			return len;
+		}
+
+	case STATE_STREAM_START:
+		icyData->streamBytesUntilMetadata = icyData->streamBlockSize;
+		state = STATE_STREAM;
+		//no break
+
+	case STATE_STREAM:
+		partLen = FreeRTOS_min_uint32(len, icyData->streamBytesUntilMetadata);
+
+		lStreamBufferAdd(streamBuff, 0, data, partLen);
+
+		icyData->streamBytesUntilMetadata -= partLen;
+
+		if (icyData->streamBytesUntilMetadata == 0)
+		{
+			state = STATE_META_DATA_START;
+		}
+		return partLen;
+
+	case STATE_META_DATA_START:
+		if (data[0] != 0)
+		{
+			icyData->metaDataBlockSize = data[0] << 4;
+			icyData->metaDataBytesUntilStreamData = data[0] << 4;
+			vStreamBufferClear(metaBuff);
+			state = STATE_META_DATA;
+		}
+		else
+		{
+			state = STATE_STREAM_START;
+		}
+		return 1;
+
+	case STATE_META_DATA:
+		partLen = FreeRTOS_min_uint32(len, icyData->metaDataBytesUntilStreamData);
+		lStreamBufferAdd(metaBuff, 0, data, partLen);
+
+		icyData->metaDataBytesUntilStreamData -= partLen;
+
+		if (icyData->metaDataBytesUntilStreamData == 0)
+		{
+			parseMetaInfo(metaBuff, icyData);
+			state = STATE_STREAM_START;
+		}
+		return partLen;
+	}
+	return len;
+}
+
 void parseHeader(xStreamBuffer * streamBuff, IcyData * icyData)
 {
 	uint8_t * buff;
 	char * tempPtr;
 	char * tmp;
 	lStreamBufferGetPtr(streamBuff, &buff);
+	if ((tempPtr = strstr((char *) buff, "icy-name:")) != NULL)
+	{
+		int i = 0;
+		tempPtr += strlen("icy-name:");
+
+		for (i = 0; i < sizeof(icyData->name); i++)
+		{
+			if (tempPtr[i] == '\r' || tempPtr[i] == '\n')
+			{
+				icyData->name[i] = '\0';
+				break;
+			}
+			else
+			{
+				icyData->name[i] = tempPtr[i];
+			}
+		}
+	}
 	if ((tempPtr = strstr((char *) buff, "icy-metaint:")) != NULL)
 	{
 		tempPtr += strlen("icy-metaint:");
-		icyData->metaInt = strtol(tempPtr, &tmp, 10) << 4;
+		icyData->streamBlockSize = strtol(tempPtr, &tmp, 10);
 	}
 	if ((tempPtr = strstr((char *) buff, "icy-br:")) != NULL)
 	{
 		tempPtr += strlen("icy-br:");
 		icyData->bitrate = strtol(tempPtr, &tmp, 10);
 	}
+}
+
+void parseMetaInfo(xStreamBuffer * metaBuff, IcyData * icyData)
+{
+	uint8_t * buff;
+	char * tempPtr;
+	lStreamBufferGetPtr(metaBuff, &buff);
+	if ((tempPtr = strstr((char *) buff, "StreamTitle='")) != NULL)
+	{
+		int i = 0;
+		tempPtr += strlen("StreamTitle='");
+
+		for (i = 0; i < sizeof(icyData->title); i++)
+		{
+			if (tempPtr[i] == '\'')
+			{
+				icyData->title[i] = '\0';
+				break;
+			}
+			else
+			{
+				icyData->title[i] = tempPtr[i];
+			}
+		}
+	}
+	UARTprintf("Title: %s\n", icyData->title);
 }
 
 void parseURL(char *URL, char *request_header, char *host_name, uint16_t *port)
