@@ -39,12 +39,20 @@ typedef struct
 	uint32_t metaDataBytesUntilStreamData; // how many bytes left from the current meta data block
 } IcyData;
 
+typedef enum
+{
+	RET_OK, //
+	RET_REDIRECT, //
+	RET_ERROR
+} ParserRet;
+
 static void prvShoutcastTask(void *pvParameters);
-uint32_t processReceivedData(uint8_t * data, uint32_t len, xStreamBuffer * streamBuff, xStreamBuffer * metaBuff,
-								IcyData * icyData);
+ParserRet processReceivedData(uint8_t * data, uint32_t len, xStreamBuffer * streamBuff, xStreamBuffer * metaBuff,
+								IcyData * icyData, uint32_t * processedLen);
 static uint32_t getHttpStatusCode(xStreamBuffer * streamBuff);
 void parseMetaInfo(xStreamBuffer * metaBuff, IcyData * icyData);
-void parseHeader(xStreamBuffer * streamBuff, IcyData * icyData);
+void parseIcyHeader(xStreamBuffer * streamBuff, IcyData * icyData);
+void parseRedirectHeader(xStreamBuffer * streamBuff, char * redirectUrl, uint32_t len);
 void getRequestInfo(char * URL, struct freertos_sockaddr * addr, char * requestHeader);
 void parseURL(char *URL, char *request_header, char *host_name, uint16_t *port);
 
@@ -73,14 +81,15 @@ static void prvShoutcastTask(void *pvParameters)
 	xSocket_t xSocket;
 	struct freertos_sockaddr xServer;
 
-	char url[] = "http://185.33.23.5:80";
-	//char url[] = "http://50.30.37.166:42000";
-	//char url[] = "http://204.62.13.214:80/musicone/mp3/128k";
-	//char url[] = "http://listen.radionomy.com/PARTYVIBERADIO-Reggae-Roots-Dancehall-Dub";
+	//char radio[] = "http://185.33.23.5:80";
+	//char radio[] = "http://50.30.37.166:42000";
+	//char radio[] = "http://204.62.13.214:80/musicone/mp3/128k";
+	char radio[] = "http://listen.radionomy.com/PARTYVIBERADIO-Reggae-Roots-Dancehall-Dub";
+	char url[256];
 	char requestHeader[REQUEST_HEADER_MAX_LEN];
 	uint8_t recBuff[REC_BUFF_SIZE];
 	uint8_t * pRecBuff;
-	int processedBytes;
+	uint32_t processedBytes;
 
 	BaseType_t ret;
 	IcyData icyData;
@@ -88,57 +97,69 @@ static void prvShoutcastTask(void *pvParameters)
 	xStreamBuffer * streamBuff = createStreamBuffer(STREAM_BUFF_SIZE);
 	xStreamBuffer * metaBuff = createStreamBuffer(META_BUFF_SIZE);
 
-	memset(&icyData, 0, sizeof(IcyData));
+	strcpy(url, radio);
 
-	getRequestInfo(url, &xServer, requestHeader);
-	initClientSocket(&xSocket, 1234);
-
-	ret = FreeRTOS_connect(xSocket, &xServer, sizeof(struct freertos_sockaddr));
-
-	if (ret == 0)
-	{
-		FreeRTOS_send(xSocket, requestHeader, strlen(requestHeader), 0);
-
-		for (;;)
-		{
-			ret = FreeRTOS_recv(xSocket, recBuff, REC_BUFF_SIZE - 1, 0);
-
-			if (ret > 0)
-			{
-				pRecBuff = recBuff;
-				do
-				{
-					processedBytes = processReceivedData(pRecBuff, ret, streamBuff, metaBuff, &icyData);
-					ret -= processedBytes;
-					pRecBuff += processedBytes;
-				} while (ret > 0);
-			}
-			else if (ret == 0)
-			{
-				UARTprintf("Received 0 bytes\n");
-			}
-			else
-			{
-				UARTprintf("Receive ERROR %d... shutting down...\n", ret);
-				/* Error (maybe the connected socket already shut down the socket?).
-				 Attempt graceful shutdown. */
-				FreeRTOS_shutdown(xSocket, FREERTOS_SHUT_RDWR);
-				break;
-			}
-		}
-
-		/* The RTOS task will get here if an error is received on a read.  Ensure the
-		 socket has shut down (indicated by FreeRTOS_recv() returning a FREERTOS_EINVAL
-		 error before closing the socket). */
-
-		waitForSocketClose(&xSocket);
-
-	}
-
-	UARTprintf("Dying\r\n\r\n");
 	while (1)
 	{
+		initClientSocket(&xSocket, 1238);
+		memset(&icyData, 0, sizeof(IcyData));
+		vStreamBufferClear(streamBuff);
+		vStreamBufferClear(metaBuff);
 
+		getRequestInfo(url, &xServer, requestHeader);
+
+		ret = FreeRTOS_connect(xSocket, &xServer, sizeof(struct freertos_sockaddr));
+
+		if (ret == 0)
+		{
+			FreeRTOS_send(xSocket, requestHeader, strlen(requestHeader), 0);
+
+			for (;;)
+			{
+				ret = FreeRTOS_recv(xSocket, recBuff, REC_BUFF_SIZE - 1, 0);
+
+				if (ret > 0)
+				{
+					pRecBuff = recBuff;
+					do
+					{
+						switch (processReceivedData(pRecBuff, ret, streamBuff, metaBuff, &icyData, &processedBytes))
+						{
+						case RET_OK:
+							ret -= processedBytes;
+							pRecBuff += processedBytes;
+							break;
+
+						case RET_REDIRECT:
+							parseRedirectHeader(streamBuff, &url, sizeof(url));
+							UARTprintf("Redirected to %s\n", url);
+							FreeRTOS_shutdown(xSocket, FREERTOS_SHUT_RDWR);
+							goto closeSocket;
+
+						case RET_ERROR:
+						default:
+							UARTprintf("Parse ERROR... shutting down...\n", ret);
+							FreeRTOS_shutdown(xSocket, FREERTOS_SHUT_RDWR);
+							goto closeSocket;
+						}
+					} while (ret > 0);
+				}
+				else if (ret == 0)
+				{
+					UARTprintf("Received 0 bytes\n");
+				}
+				else
+				{
+					UARTprintf("Receive ERROR %d... shutting down...\n", ret);
+					/* Error (maybe the connected socket already shut down the socket?).
+					 Attempt graceful shutdown. */
+					FreeRTOS_shutdown(xSocket, FREERTOS_SHUT_RDWR);
+					break;
+				}
+			}
+
+			closeSocket: waitForSocketClose(&xSocket);
+		}
 	}
 }
 
@@ -151,8 +172,8 @@ typedef enum
 	STATE_META_DATA
 } IcyParserState;
 
-uint32_t processReceivedData(uint8_t * data, uint32_t len, xStreamBuffer * streamBuff, xStreamBuffer * metaBuff,
-								IcyData * icyData)
+ParserRet processReceivedData(uint8_t * data, uint32_t len, xStreamBuffer * streamBuff, xStreamBuffer * metaBuff,
+								IcyData * icyData, uint32_t * processedLen)
 {
 	static IcyParserState state = STATE_HEADER;
 	char * tempPtr;
@@ -165,28 +186,42 @@ uint32_t processReceivedData(uint8_t * data, uint32_t len, xStreamBuffer * strea
 	case STATE_HEADER:
 		if ((tempPtr = strstr((char *) data, "\r\n\r\n")) != NULL)
 		{
-			UARTprintf("ICY Header received\r\n");
-
 			// close the header with '\0' for the parsing to work correctly
 			*((int *) tempPtr) = '\0';
-
 			lStreamBufferAdd(streamBuff, 0, data, (uint32_t) tempPtr + 4 - (uint32_t) data);
 
-			parseHeader(streamBuff, icyData);
-			vStreamBufferClear(streamBuff);
+			switch (getHttpStatusCode(streamBuff))
+			{
+			case 200:
+				UARTprintf("ICY Header received\r\n");
 
-			UARTprintf("ICY name: %s\r\n", icyData->name);
-			UARTprintf("ICY bitrate: %d kbps\r\n", icyData->bitrate);
-			UARTprintf("ICY metaDataGap: %d\r\n", icyData->streamBlockSize);
+				parseIcyHeader(streamBuff, icyData);
 
-			state = STATE_STREAM_START;
-			return (uint32_t) tempPtr + 4 - (uint32_t) data;
+				UARTprintf("ICY name: %s\r\n", icyData->name);
+				UARTprintf("ICY bitrate: %d kbps\r\n", icyData->bitrate);
+				UARTprintf("ICY metaDataGap: %d\r\n", icyData->streamBlockSize);
+
+				vStreamBufferClear(streamBuff);
+				state = STATE_STREAM_START;
+				*processedLen = (uint32_t) tempPtr + 4 - (uint32_t) data;
+				return RET_OK;
+
+			case 302:
+				UARTprintf("Redirect Header received\n");
+				*processedLen = len;
+				return RET_REDIRECT;
+			default:
+				*processedLen = len;
+				return RET_ERROR;
+			}
 		}
 		else
 		{
 			lStreamBufferAdd(streamBuff, 0, data, len);
-			return len;
+			*processedLen = len;
+			return RET_OK;
 		}
+		break;
 
 	case STATE_STREAM_START:
 		icyData->streamBytesUntilMetadata = icyData->streamBlockSize;
@@ -204,7 +239,8 @@ uint32_t processReceivedData(uint8_t * data, uint32_t len, xStreamBuffer * strea
 		{
 			state = STATE_META_DATA_START;
 		}
-		return partLen;
+		*processedLen = partLen;
+		return RET_OK;
 
 	case STATE_META_DATA_START:
 		if (data[0] != 0)
@@ -218,7 +254,8 @@ uint32_t processReceivedData(uint8_t * data, uint32_t len, xStreamBuffer * strea
 		{
 			state = STATE_STREAM_START;
 		}
-		return 1;
+		*processedLen = 1;
+		return RET_OK;
 
 	case STATE_META_DATA:
 		partLen = FreeRTOS_min_uint32(len, icyData->metaDataBytesUntilStreamData);
@@ -231,27 +268,34 @@ uint32_t processReceivedData(uint8_t * data, uint32_t len, xStreamBuffer * strea
 			parseMetaInfo(metaBuff, icyData);
 			state = STATE_STREAM_START;
 		}
-		return partLen;
+		*processedLen = partLen;
+		return RET_OK;
 	}
-	return len;
+	*processedLen = len;
+	return RET_ERROR;
 }
 
 static uint32_t getHttpStatusCode(xStreamBuffer * streamBuff)
 {
 	uint8_t * buff;
 	char * tempPtr;
-	char *tmp;
+	char * tmp;
 	uint32_t status = 0;
+	UARTprintf("getHttpStatusCode()\n");
 	lStreamBufferGetPtr(streamBuff, &buff);
-	if ((tempPtr = strstr((char *) buff, "HTTP/1.")) != NULL)
+	if ((tempPtr = strstr((char *) buff, "ICY 200")) != NULL){
+		return 200;
+	}
+	else if ((tempPtr = strstr((char *) buff, "HTTP/1.")) != NULL)
 	{
 		tempPtr += strlen("HTTP/1.") + 2;
 		return strtol(tempPtr, &tmp, 10);
 	}
+
 	return status;
 }
 
-void parseHeader(xStreamBuffer * streamBuff, IcyData * icyData)
+void parseIcyHeader(xStreamBuffer * streamBuff, IcyData * icyData)
 {
 	uint8_t * buff;
 	char * tempPtr;
@@ -284,6 +328,31 @@ void parseHeader(xStreamBuffer * streamBuff, IcyData * icyData)
 	{
 		tempPtr += strlen("icy-br:");
 		icyData->bitrate = strtol(tempPtr, &tmp, 10);
+	}
+}
+
+void parseRedirectHeader(xStreamBuffer * streamBuff, char * redirectUrl, uint32_t len)
+{
+	uint8_t * buff;
+	char * tempPtr;
+	lStreamBufferGetPtr(streamBuff, &buff);
+	if ((tempPtr = strstr((char *) buff, "Location: ")) != NULL)
+	{
+		int i = 0;
+		tempPtr += strlen("Location: ");
+
+		for (i = 0; i < len; i++)
+		{
+			if (tempPtr[i] == '\r' || tempPtr[i] == '\n')
+			{
+				redirectUrl[i] = '\0';
+				break;
+			}
+			else
+			{
+				redirectUrl[i] = tempPtr[i];
+			}
+		}
 	}
 }
 
@@ -414,12 +483,16 @@ static void initClientSocket(xSocket_t * socket, uint16_t port)
 static void waitForSocketClose(xSocket_t * socket)
 {
 	char temp[10];
+
+	/* The RTOS task will get here if an error is received on a read.  Ensure the
+	 socket has shut down (indicated by FreeRTOS_recv() returning a FREERTOS_EINVAL
+	 error before closing the socket). */
 	while (FreeRTOS_recv(*socket, temp, sizeof(temp), 0) >= 0)
 	{
 		/* Wait for shutdown to complete.  If a receive block time is used then
 		 this delay will not be necessary as FreeRTOS_recv() will place the RTOS task
 		 into the Blocked state anyway. */
-		vTaskDelay(xTaskDelay / 10);
+		vTaskDelay(xTaskDelay / 100);
 
 		/* Note - real applications should implement a timeout here, not just
 		 loop forever. */
