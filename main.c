@@ -19,6 +19,7 @@
 #include "task.h"
 #include "queue.h"
 #include "semphr.h"
+#include "shoutcast.h"
 
 // System Clock rate in Hertz.
 uint32_t g_ui32SysClock;
@@ -223,15 +224,20 @@ void vApplicationMallocFailedHook(void)
 void vApplicationIPNetworkEventHook(eIPCallbackEvent_t eNetworkEvent)
 {
 	static BaseType_t xTaskAlreadyCreated = pdFALSE;
+	//char radio[] = "http://185.33.23.5:80";
+	//char radio[] = "http://50.30.37.166:42000";
+	//char radio[] = "http://204.62.13.214:80/musicone/mp3/128k";
+	char radio[] = "http://listen.radionomy.com/PARTYVIBERADIO-Reggae-Roots-Dancehall-Dub";
 
 	if (eNetworkEvent == eNetworkUp)
 	{
 		if (xTaskAlreadyCreated == pdFALSE)
 		{
-			//vStartBroadcasterTask(mainECHO_CLIENT_TASK_PRIORITY);
-			//vStartTcpServer();
 			UARTprintf("Starting Shoutcast task\n");
 			vStartShoutcastReceiver();
+
+			xQueueSendToBack(radioChannelQueue, radio, 0);
+
 			xTaskAlreadyCreated = pdTRUE;
 		}
 	}

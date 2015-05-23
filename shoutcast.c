@@ -6,6 +6,7 @@
 /* FreeRTOS includes. */
 #include "FreeRTOS.h"
 #include "task.h"
+#include "queue.h"
 
 #include "FreeRTOS_IP.h"
 #include "FreeRTOS_IP_Private.h"
@@ -13,6 +14,7 @@
 #include "FreeRTOS_Stream_Buffer.h"
 #include "NetworkBufferManagement.h"
 #include "utils/uartstdio.h"
+#include "shoutcast.h"
 
 #define USER_NAME "WEBRADIO"
 #define DIR_MAX_LEN 128
@@ -62,6 +64,7 @@ static xStreamBuffer * createStreamBuffer(uint32_t size);
 
 void vStartShoutcastReceiver(void)
 {
+	radioChannelQueue = xQueueCreate(3, 256);
 	xTaskCreate(prvShoutcastTask, /* The function that implements the task. */
 				"Shoutcast", /* Just a text name for the task to aid debugging. */
 				STACK_SIZE, /* The stack size is defined in FreeRTOSIPConfig.h. */
@@ -80,16 +83,12 @@ static void prvShoutcastTask(void *pvParameters)
 {
 	xSocket_t xSocket;
 	struct freertos_sockaddr xServer;
-
-	//char radio[] = "http://185.33.23.5:80";
-	//char radio[] = "http://50.30.37.166:42000";
-	//char radio[] = "http://204.62.13.214:80/musicone/mp3/128k";
-	char radio[] = "http://listen.radionomy.com/PARTYVIBERADIO-Reggae-Roots-Dancehall-Dub";
 	char url[256];
 	char requestHeader[REQUEST_HEADER_MAX_LEN];
 	uint8_t recBuff[REC_BUFF_SIZE];
 	uint8_t * pRecBuff;
 	uint32_t processedBytes;
+	uint8_t redirected = 0;
 
 	BaseType_t ret;
 	IcyData icyData;
@@ -97,14 +96,21 @@ static void prvShoutcastTask(void *pvParameters)
 	xStreamBuffer * streamBuff = createStreamBuffer(STREAM_BUFF_SIZE);
 	xStreamBuffer * metaBuff = createStreamBuffer(META_BUFF_SIZE);
 
-	strcpy(url, radio);
-
 	while (1)
 	{
-		initClientSocket(&xSocket, 1238);
+		initClientSocket(&xSocket, 1233);
 		memset(&icyData, 0, sizeof(IcyData));
 		vStreamBufferClear(streamBuff);
 		vStreamBufferClear(metaBuff);
+
+		if (!redirected)
+		{
+			xQueueReceive(radioChannelQueue, url, portMAX_DELAY);
+		}
+		else
+		{
+			redirected = 0;
+		}
 
 		getRequestInfo(url, &xServer, requestHeader);
 
@@ -116,6 +122,11 @@ static void prvShoutcastTask(void *pvParameters)
 
 			for (;;)
 			{
+				if (xQueuePeek(radioChannelQueue, url, 0))
+				{
+					goto closeSocket;
+				}
+
 				ret = FreeRTOS_recv(xSocket, recBuff, REC_BUFF_SIZE - 1, 0);
 
 				if (ret > 0)
@@ -131,8 +142,9 @@ static void prvShoutcastTask(void *pvParameters)
 							break;
 
 						case RET_REDIRECT:
-							parseRedirectHeader(streamBuff, &url, sizeof(url));
+							parseRedirectHeader(streamBuff, url, sizeof(url));
 							UARTprintf("Redirected to %s\n", url);
+							redirected = 1;
 							FreeRTOS_shutdown(xSocket, FREERTOS_SHUT_RDWR);
 							goto closeSocket;
 
@@ -283,7 +295,8 @@ static uint32_t getHttpStatusCode(xStreamBuffer * streamBuff)
 	uint32_t status = 0;
 	UARTprintf("getHttpStatusCode()\n");
 	lStreamBufferGetPtr(streamBuff, &buff);
-	if ((tempPtr = strstr((char *) buff, "ICY 200")) != NULL){
+	if ((tempPtr = strstr((char *) buff, "ICY 200")) != NULL)
+	{
 		return 200;
 	}
 	else if ((tempPtr = strstr((char *) buff, "HTTP/1.")) != NULL)
