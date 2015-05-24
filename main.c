@@ -143,8 +143,6 @@ int main(void)
 	//IntPrioritySet(INT_EMAC0_TM4C129, configMAC_INTERRUPT_PRIORITY);
 	IntPrioritySet(INT_UART0, configUART_INTERRUPT_PRIORITY);
 
-	vStartRfidTask();
-
 	UARTprintf("--- Starting OS ---\n\n");
 
 	vTaskStartScheduler();
