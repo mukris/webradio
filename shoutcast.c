@@ -21,7 +21,6 @@
 #define HOST_NAME_MAX_LEN 128
 #define REQUEST_HEADER_MAX_LEN 200
 
-#define REC_BUFF_SIZE 256
 #define STREAM_BUFF_SIZE 4096
 #define META_BUFF_SIZE 512
 #define STACK_SIZE ( configMINIMAL_STACK_SIZE * 80 )
@@ -85,12 +84,11 @@ static void prvShoutcastTask(void *pvParameters)
 	struct freertos_sockaddr xServer;
 	char url[256];
 	char requestHeader[REQUEST_HEADER_MAX_LEN];
-	uint8_t recBuff[REC_BUFF_SIZE];
 	uint8_t * pRecBuff;
 	uint32_t processedBytes;
 	uint8_t redirected = 0;
 
-	BaseType_t ret;
+	BaseType_t ret, received;
 	IcyData icyData;
 
 	xStreamBuffer * streamBuff = createStreamBuffer(STREAM_BUFF_SIZE);
@@ -127,11 +125,13 @@ static void prvShoutcastTask(void *pvParameters)
 					goto closeSocket;
 				}
 
-				ret = FreeRTOS_recv(xSocket, recBuff, REC_BUFF_SIZE - 1, 0);
+				// zero copy
+				// get a pointer to the receive stream
+				ret = FreeRTOS_recv(xSocket, &pRecBuff, 0, FREERTOS_ZERO_COPY);
 
 				if (ret > 0)
 				{
-					pRecBuff = recBuff;
+					received = ret;
 					do
 					{
 						switch (processReceivedData(pRecBuff, ret, streamBuff, metaBuff, &icyData, &processedBytes))
@@ -155,6 +155,13 @@ static void prvShoutcastTask(void *pvParameters)
 							goto closeSocket;
 						}
 					} while (ret > 0);
+
+					/*
+					 * Tell the driver the data (received bytes) may be flushed from the buffer.
+					 * In case of RET_REDIRECT and RET_ERROR it is not necessary,
+					 * the socket will be closed...
+					 */
+					FreeRTOS_recv(xSocket, NULL, received, 0);
 				}
 				else if (ret == 0)
 				{
@@ -188,15 +195,26 @@ ParserRet processReceivedData(uint8_t * data, uint32_t len, xStreamBuffer * stre
 								IcyData * icyData, uint32_t * processedLen)
 {
 	static IcyParserState state = STATE_HEADER;
-	char * tempPtr;
+	uint32_t * tempPtr;
 	uint32_t partLen;
-
-	data[len] = '\0';
+	int i;
 
 	switch (state)
 	{
 	case STATE_HEADER:
-		if ((tempPtr = strstr((char *) data, "\r\n\r\n")) != NULL)
+
+		// search for "/r/n/r/n" (end of the header)
+		tempPtr = NULL;
+		for (i = 0; i < len - 3; i++)
+		{
+			if (data[i] == '\r' && data[i + 1] == '\n' && data[i + 2] == '\r' && data[i + 3] == '\n')
+			{
+				tempPtr = &data[i];
+				break;
+			}
+		}
+
+		if (tempPtr != NULL)
 		{
 			// close the header with '\0' for the parsing to work correctly
 			*((int *) tempPtr) = '\0';
@@ -277,6 +295,8 @@ ParserRet processReceivedData(uint8_t * data, uint32_t len, xStreamBuffer * stre
 
 		if (icyData->metaDataBytesUntilStreamData == 0)
 		{
+			uint8_t n = '\0';
+			lStreamBufferAdd(metaBuff, 0, &n, 1);
 			parseMetaInfo(metaBuff, icyData);
 			state = STATE_STREAM_START;
 		}
