@@ -13,29 +13,26 @@
 #include "inc/hw_memmap.h"
 #include "include/FreeRTOS.h"
 #include "task.h"
-#include "queue.h"
-#include "lcd.h"
 
 //Port and Pins
-#define PortL 			GPIO_PORTL_BASE
-#define PORT_ENABLE 	SYSCTL_PERIPH_GPIOL
-#define D4 				GPIO_PIN_0
-#define D5 				GPIO_PIN_1
-#define D6				GPIO_PIN_2
-#define D7 				GPIO_PIN_3
-#define RS 		 		GPIO_PIN_4
-#define E 				GPIO_PIN_5
+#define PortK 			GPIO_PORTK_BASE
+#define PORT_ENABLE 	SYSCTL_PERIPH_GPIOK
+#define D4 				GPIO_PIN_4
+#define D5 				GPIO_PIN_5
+#define D6				GPIO_PIN_6
+#define D7 				GPIO_PIN_7
+#define RS 		 		GPIO_PIN_1
+#define E 				GPIO_PIN_0
 #define STACK_SIZE ( configMINIMAL_STACK_SIZE * 10 )
 
-static const TickType_t xTaskDelay = 1 / portTICK_RATE_MS;
+static const TickType_t xTaskDelay = 0.001 / portTICK_RATE_MS;
 
-static void prvLCDTask(void *pvParameters){
+void prvLCDTask(void){
 	LCD_Init();
 	while(true);
 }
 //LCD task
 void vStartLCDTask(void){
-	lcdQueue = xQueueCreate(10, 32);
 	xTaskCreate(prvLCDTask, "LCD", STACK_SIZE, NULL, configMAX_PRIORITIES - 4, NULL);
 }
 
@@ -45,93 +42,81 @@ void vStartLCDTask(void){
 // Outputs: none
 void LCD_Init(void){
 	SysCtlPeripheralEnable(PORT_ENABLE);	//enable port
-	GPIOPinTypeGPIOOutput(PortL,0xff);		//port out
+	GPIOPinTypeGPIOOutput(PortK, D7 | D6 | D5 | D4 | RS | E);		//port out
 
-	vTaskDelay(40*xTaskDelay);				//wait 15 ms
+	vTaskDelay(20000*xTaskDelay);				//wait 15 ms
 
-	GPIOPinWrite(PortL, RS,  0x00 );
+	//NULL decl
+	GPIOPinWrite(PortK, RS,  0x00 );
+	GPIOPinWrite(PortK, E,  0x00 );
+	GPIOPinWrite(PortK, D7 | D6 | D5 | D4,  0x00 );
 
-	GPIOPinWrite(PortL, D7 | D6 | D5 | D4,  D4 | D5 ); // Function Set 3h
-	GPIOPinWrite(PortL, E, E);	//enable
-	vTaskDelay(1*xTaskDelay);	//wait a bit
-	GPIOPinWrite(PortL, E, 0x00);	//enable off
-	vTaskDelay(5*xTaskDelay);	//wait 4.1 ms
+	//First
+	GPIOPinWrite(PortK, D7 | D6 | D5 | D4,  D4 | D5 ); // Function Set 3h
+	PulseE(5000);
 
-	GPIOPinWrite(PortL, D7 | D6 | D5 | D4,  D4 | D5 );	// Function Set 3h
-	GPIOPinWrite(PortL, E, E); //enable
-	vTaskDelay(1*xTaskDelay); //wait a bit
-	GPIOPinWrite(PortL, E, 0x00); //enable off
-	vTaskDelay(5*xTaskDelay); //wait 100 us
+	//Second
+	GPIOPinWrite(PortK, D7 | D6 | D5 | D4,  D4 | D5 );	// Function Set 3h
+	PulseE(500);
 
-	GPIOPinWrite(PortL, D7 | D6 | D5 | D4,  D4 | D5 );	// Function Set 3h
-	GPIOPinWrite(PortL, E, E); //enable
-	vTaskDelay(1*xTaskDelay); //wait a bit
-	GPIOPinWrite(PortL, E, 0x00); //enable off
-	vTaskDelay(5*xTaskDelay); //wait 100 us
+	//Third
+	GPIOPinWrite(PortK, D7 | D6 | D5 | D4,  D4 | D5 );	// Function Set 3h
+	PulseE(500);
 
-	GPIOPinWrite(PortL, D7 | D6 | D5 | D4,  D5 ); // Function Set 2h
-	GPIOPinWrite(PortL, E, E); //enable
-	vTaskDelay(1*xTaskDelay); //wait a bit
-	GPIOPinWrite(PortL, E, 0x00); //enable off
-	vTaskDelay(5*xTaskDelay); //wait 100 us
+	GPIOPinWrite(PortK, D7 | D6 | D5 | D4,  D5 ); // Function Set 2h
+	PulseE(500);
 
 	// Function set
-	GPIOPinWrite(PortL, D7 | D6 | D5 | D4,  D5 ); // Function Set 2h
-	GPIOPinWrite(PortL, E, E); //enable
-	vTaskDelay(1*xTaskDelay); //wait a bit
-	GPIOPinWrite(PortL, D7 | D6 | D5 | D4,  D7 ); // Function Set 8h
-	GPIOPinWrite(PortL, E, 0x00); //enable off
-	vTaskDelay(5*xTaskDelay); //wait 100 us
+	GPIOPinWrite(PortK, D7 | D6 | D5 | D4,  D5 ); // Function Set 2h
+	PulseE(500);
+
+	GPIOPinWrite(PortK, D7 | D6 | D5 | D4,  D7 ); // Function Set 8h
+	PulseE(500);
 
 	// Display ON/OFF (OFF)
-	GPIOPinWrite(PortL, D7 | D6 | D5 | D4,  0x00 ); // Function Set 0h
-	GPIOPinWrite(PortL, E, E); //enable
-	vTaskDelay(1*xTaskDelay); //wait a bit
-	GPIOPinWrite(PortL, D7 | D6 | D5 | D4,  D7 ); // Function Set 8h
-	GPIOPinWrite(PortL, E, 0x00); //enable off
-	vTaskDelay(5*xTaskDelay); //wait 100 us
+	GPIOPinWrite(PortK, D7 | D6 | D5 | D4,  0x00 ); // Function Set 0h
+	PulseE(500);
+
+	GPIOPinWrite(PortK, D7 | D6 | D5 | D4,  D7 ); // Function Set 8h
+	PulseE(500);
 
 	//Clear display
-	GPIOPinWrite(PortL, D7 | D6 | D5 | D4,  0x00 ); // Function Set 0h
-	GPIOPinWrite(PortL, E, E); //enable
-	vTaskDelay(1*xTaskDelay); //wait a bit
-	GPIOPinWrite(PortL, D7 | D6 | D5 | D4,  D4 ); // Function Set 1h
-	GPIOPinWrite(PortL, E, 0x00); //enable off
-	vTaskDelay(5*xTaskDelay); //wait 100 us
+	GPIOPinWrite(PortK, D7 | D6 | D5 | D4,  0x00 ); // Function Set 0h
+	PulseE(500);
+
+	GPIOPinWrite(PortK, D7 | D6 | D5 | D4,  D4 ); // Function Set 1h
+	PulseE(500);
 
 	//Entry mode
-	GPIOPinWrite(PortL, D7 | D6 | D5 | D4,  0x00 ); // Function Set 0h
-	GPIOPinWrite(PortL, E, E); //enable
-	vTaskDelay(1*xTaskDelay); //wait a bit
-	GPIOPinWrite(PortL, D7 | D6 | D5 | D4,  D5 | D6 ); // Function Set 6h
-	GPIOPinWrite(PortL, E, 0x00); //enable off
-	vTaskDelay(5*xTaskDelay); //wait 100 us
+	GPIOPinWrite(PortK, D7 | D6 | D5 | D4,  0x00 ); // Function Set 0h
+	PulseE(500);
+
+	GPIOPinWrite(PortK, D7 | D6 | D5 | D4,  D5 | D6 ); // Function Set 6h
+	PulseE(500);
 
 	// Display ON/OFF
-	GPIOPinWrite(PortL, D7 | D6 | D5 | D4,  0x00 ); // Function Set 0h
-	GPIOPinWrite(PortL, E, E); //enable
-	vTaskDelay(1*xTaskDelay); //wait a bit
-	GPIOPinWrite(PortL, D7 | D6 | D5 | D4,  D7 | D6  ); // Function Set 8h
-	GPIOPinWrite(PortL, E, 0x00); //enable off
-	vTaskDelay(5*xTaskDelay); //wait 100 us*/
+	GPIOPinWrite(PortK, D7 | D6 | D5 | D4,  0x00 ); // Function Set 0h
+	PulseE(500);
 
-	LCDWriteText("", 1, 16);
+	GPIOPinWrite(PortK, D7 | D6 | D5 | D4,  D7 | D6  ); // Function Set 8h
+	PulseE(500);
+
+	LCDWriteText("Hello World!", 0, 0);
+	LCDWriteText("Hello World!", 0, 0);
+	LCDWriteText("Hello World!", 0, 0);
+	LCDWriteText("Hello World!", 0, 0);
+
 }
 
 void LCDCommand(unsigned char command) {
 
-	GPIOPinWrite(PortL, D7 | D6 | D5 | D4, (command & 0xf0) ); //
-	GPIOPinWrite(PortL, RS, 0x00);
-	GPIOPinWrite(PortL, E, E);
-	vTaskDelay(1*xTaskDelay);
-	GPIOPinWrite(PortL, E, 0x00);
-	vTaskDelay(1*xTaskDelay);
+	GPIOPinWrite(PortK, D7 | D6 | D5 | D4, (command & 0xf0) );
+	GPIOPinWrite(PortK, RS, 0x00);
+	PulseE(500);
 
-	GPIOPinWrite(PortL, D7 | D6 | D5 | D4, (command & 0x0f) << 4 );
-	GPIOPinWrite(PortL, RS, 0x00);
-	GPIOPinWrite(PortL, E, E);
-	vTaskDelay(1*xTaskDelay);
-	GPIOPinWrite(PortL, E, 0x00);
+	GPIOPinWrite(PortK, D7 | D6 | D5 | D4, (command & 0x0f) << 4 );
+	GPIOPinWrite(PortK, RS, 0x00);
+	PulseE(500);
 
 	vTaskDelay(1*xTaskDelay);
 
@@ -139,42 +124,37 @@ void LCDCommand(unsigned char command) {
 
 void LCDWrite(unsigned char inputData) {
 
-	GPIOPinWrite(PortL, D7 | D6 | D5 | D4, (inputData & 0xf0) );
-	GPIOPinWrite(PortL, RS, RS);
-	GPIOPinWrite(PortL, E, E);
-	vTaskDelay(1*xTaskDelay);
-	GPIOPinWrite(PortL, E, 0x00);
+	GPIOPinWrite(PortK, D7 | D6 | D5 | D4, (inputData & 0xf0) );
+	GPIOPinWrite(PortK, RS, RS);
+	PulseE(500);
 
-	vTaskDelay(1*xTaskDelay);
-
-	GPIOPinWrite(PortL, D7 | D6 | D5 | D4, (inputData & 0x0f) << 4 );
-	GPIOPinWrite(PortL, RS, RS);
-	GPIOPinWrite(PortL, E, E);
-	vTaskDelay(2*xTaskDelay);
-	GPIOPinWrite(PortL, E, 0);
-
-	vTaskDelay(5*xTaskDelay);
+	GPIOPinWrite(PortK, D7 | D6 | D5 | D4, (inputData & 0x0f) << 4 );
+	GPIOPinWrite(PortK, RS, RS);
+	PulseE(500);
 
 }
 
 void LCDWriteText(char* inputText,unsigned char row, unsigned char col) {
-	unsigned char address_d = 0;		// address of the data in the screen.
+	unsigned char address_d = 0x80;		// address of the data in the screen.
 	switch(row)
 	{
 	case 0: address_d = 0x80 + col;		// at zeroth row
 	break;
 	case 1: address_d = 0xC0 + col;		// at first row
 	break;
-	case 2: address_d = 0x94 + col;		// at second row
-	break;
-	case 3: address_d = 0xD4 + col;		// at third row
-	break;
-	default: address_d = 0x80 + col;	// returns to first row if invalid row number is detected
+	default: address_d = 0x80 + col;
 	break;
 	}
 
-	LCDCommand(address_d);
+	//LCDCommand(address_d);
 
 	while(*inputText)					// Place a string, letter by letter.
 		LCDWrite(*inputText++);
+}
+
+void PulseE(double us){
+	GPIOPinWrite(PortK, E, E);	//enable
+	vTaskDelay(100*xTaskDelay);	//wait a bit
+	GPIOPinWrite(PortK, E, 0x00);	//enable off
+	vTaskDelay(us*xTaskDelay);	//wait 4.1 ms
 }
