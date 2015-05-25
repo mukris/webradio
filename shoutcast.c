@@ -489,7 +489,8 @@ void parseURL(char *URL, char *request_header, char *host_name, uint16_t *port)
 	strcat(request_header, "\r\nAccept: */*\r\nIcy-MetaData:1\r\nConnection: close\r\n\r\n");
 }
 
-static void onTitleReceived(char * title) {
+static void onTitleReceived(char * title)
+{
 	xQueueSend(lcdQueue, title, 0);
 	UARTprintf("Title: %s\n", title);
 }
@@ -517,13 +518,16 @@ static void initClientSocket(xSocket_t * socket, uint16_t port)
 
 static void waitForSocketClose(xSocket_t * socket)
 {
-	char temp[10];
+	char *temp;
+	int32_t ret;
 
 	/* The RTOS task will get here if an error is received on a read.  Ensure the
 	 socket has shut down (indicated by FreeRTOS_recv() returning a FREERTOS_EINVAL
 	 error before closing the socket). */
-	while (FreeRTOS_recv(*socket, temp, sizeof(temp), 0) >= 0)
+	while ((ret = FreeRTOS_recv(*socket, &temp, 0, FREERTOS_ZERO_COPY)) >= 0)
 	{
+		FreeRTOS_recv(*socket, NULL, ret, 0);
+		UARTprintf("Closing... received: %d\n", ret);
 		/* Wait for shutdown to complete.  If a receive block time is used then
 		 this delay will not be necessary as FreeRTOS_recv() will place the RTOS task
 		 into the Blocked state anyway. */
@@ -533,8 +537,11 @@ static void waitForSocketClose(xSocket_t * socket)
 		 loop forever. */
 	}
 
+	UARTprintf("Ready to close\n");
 	/* Shutdown is complete and the socket can be safely closed. */
 	FreeRTOS_closesocket(*socket);
+	vTaskDelay(xTaskDelay);
+	UARTprintf("Socket closed\n");
 }
 
 static xStreamBuffer * createStreamBuffer(uint32_t size)
