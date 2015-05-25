@@ -13,6 +13,8 @@
 #include "inc/hw_memmap.h"
 #include "include/FreeRTOS.h"
 #include "task.h"
+#include "queue.h"
+#include "lcd.h"
 
 //Port and Pins
 #define PortL 			GPIO_PORTL_BASE
@@ -27,12 +29,13 @@
 
 static const TickType_t xTaskDelay = 1 / portTICK_RATE_MS;
 
-void prvLCDTask(void){
+static void prvLCDTask(void *pvParameters){
 	LCD_Init();
 	while(true);
 }
 //LCD task
 void vStartLCDTask(void){
+	lcdQueue = xQueueCreate(10, 32);
 	xTaskCreate(prvLCDTask, "LCD", STACK_SIZE, NULL, configMAX_PRIORITIES - 4, NULL);
 }
 

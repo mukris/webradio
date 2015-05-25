@@ -8,9 +8,13 @@
 #ifndef LCD_H_
 #define LCD_H_
 
+#include "FreeRTOS.h"
+#include "queue.h"
+
+xQueueHandle lcdQueue;
+
 //LCD task
 void vStartLCDTask(void);
-void prvLCDTask(void);
 
 // Initialize LCD
 // Inputs: none

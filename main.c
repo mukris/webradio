@@ -22,6 +22,7 @@
 #include "semphr.h"
 #include "shoutcast.h"
 #include "console.h"
+#include "lcd.h"
 
 // System Clock rate in Hertz.
 uint32_t g_ui32SysClock;

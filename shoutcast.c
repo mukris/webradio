@@ -15,6 +15,7 @@
 #include "NetworkBufferManagement.h"
 #include "utils/uartstdio.h"
 #include "shoutcast.h"
+#include "lcd.h"
 
 #define USER_NAME "WEBRADIO"
 #define DIR_MAX_LEN 128
@@ -57,6 +58,7 @@ void parseRedirectHeader(xStreamBuffer * streamBuff, char * redirectUrl, uint32_
 void getRequestInfo(char * URL, struct freertos_sockaddr * addr, char * requestHeader);
 void parseURL(char *URL, char *request_header, char *host_name, uint16_t *port);
 
+static void onTitleReceived(char * title);
 static void initClientSocket(xSocket_t * socket, uint16_t port);
 static void waitForSocketClose(xSocket_t * socket);
 static xStreamBuffer * createStreamBuffer(uint32_t size);
@@ -407,7 +409,7 @@ void parseMetaInfo(xStreamBuffer * metaBuff, IcyData * icyData)
 			}
 		}
 	}
-	UARTprintf("Title: %s\n", icyData->title);
+	onTitleReceived(icyData->title);
 }
 
 void getRequestInfo(char * URL, struct freertos_sockaddr * addr, char * requestHeader)
@@ -485,6 +487,11 @@ void parseURL(char *URL, char *request_header, char *host_name, uint16_t *port)
 	strcat(request_header, "User-Agent: ");
 	strcat(request_header, USER_NAME);
 	strcat(request_header, "\r\nAccept: */*\r\nIcy-MetaData:1\r\nConnection: close\r\n\r\n");
+}
+
+static void onTitleReceived(char * title) {
+	xQueueSend(lcdQueue, title, 0);
+	UARTprintf("Title: %s\n", title);
 }
 
 static void initClientSocket(xSocket_t * socket, uint16_t port)
