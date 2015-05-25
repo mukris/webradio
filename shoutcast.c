@@ -73,10 +73,14 @@ void vStartShoutcastReceiver(void)
 
 typedef enum
 {
-	STATE_READY, //
-	STATE_CONNECTING, //
-	STATE_RECEIVING //
-} ReceiverState;
+	STATE_HEADER, //
+	STATE_STREAM_START, //
+	STATE_STREAM, //
+	STATE_META_DATA_START, //
+	STATE_META_DATA
+} IcyParserState;
+
+static IcyParserState parserState = STATE_HEADER;
 
 static void prvShoutcastTask(void *pvParameters)
 {
@@ -100,6 +104,7 @@ static void prvShoutcastTask(void *pvParameters)
 		memset(&icyData, 0, sizeof(IcyData));
 		vStreamBufferClear(streamBuff);
 		vStreamBufferClear(metaBuff);
+		parserState = STATE_HEADER;
 
 		if (!redirected)
 		{
@@ -120,8 +125,9 @@ static void prvShoutcastTask(void *pvParameters)
 
 			for (;;)
 			{
-				if (xQueuePeek(radioChannelQueue, url, 0))
+				if (xQueuePeek(radioChannelQueue, url, 0) == pdTRUE)
 				{
+					FreeRTOS_shutdown(xSocket, FREERTOS_SHUT_RDWR);
 					goto closeSocket;
 				}
 
@@ -182,27 +188,16 @@ static void prvShoutcastTask(void *pvParameters)
 	}
 }
 
-typedef enum
-{
-	STATE_HEADER, //
-	STATE_STREAM_START, //
-	STATE_STREAM, //
-	STATE_META_DATA_START, //
-	STATE_META_DATA
-} IcyParserState;
-
 ParserRet processReceivedData(uint8_t * data, uint32_t len, xStreamBuffer * streamBuff, xStreamBuffer * metaBuff,
 								IcyData * icyData, uint32_t * processedLen)
 {
-	static IcyParserState state = STATE_HEADER;
 	uint32_t * tempPtr;
 	uint32_t partLen;
 	int i;
 
-	switch (state)
+	switch (parserState)
 	{
 	case STATE_HEADER:
-
 		// search for "/r/n/r/n" (end of the header)
 		tempPtr = NULL;
 		for (i = 0; i < len - 3; i++)
@@ -232,7 +227,7 @@ ParserRet processReceivedData(uint8_t * data, uint32_t len, xStreamBuffer * stre
 				UARTprintf("ICY metaDataGap: %d\r\n", icyData->streamBlockSize);
 
 				vStreamBufferClear(streamBuff);
-				state = STATE_STREAM_START;
+				parserState = STATE_STREAM_START;
 				*processedLen = (uint32_t) tempPtr + 4 - (uint32_t) data;
 				return RET_OK;
 
@@ -255,7 +250,7 @@ ParserRet processReceivedData(uint8_t * data, uint32_t len, xStreamBuffer * stre
 
 	case STATE_STREAM_START:
 		icyData->streamBytesUntilMetadata = icyData->streamBlockSize;
-		state = STATE_STREAM;
+		parserState = STATE_STREAM;
 		//no break
 
 	case STATE_STREAM:
@@ -267,7 +262,7 @@ ParserRet processReceivedData(uint8_t * data, uint32_t len, xStreamBuffer * stre
 
 		if (icyData->streamBytesUntilMetadata == 0)
 		{
-			state = STATE_META_DATA_START;
+			parserState = STATE_META_DATA_START;
 		}
 		*processedLen = partLen;
 		return RET_OK;
@@ -278,11 +273,11 @@ ParserRet processReceivedData(uint8_t * data, uint32_t len, xStreamBuffer * stre
 			icyData->metaDataBlockSize = data[0] << 4;
 			icyData->metaDataBytesUntilStreamData = data[0] << 4;
 			vStreamBufferClear(metaBuff);
-			state = STATE_META_DATA;
+			parserState = STATE_META_DATA;
 		}
 		else
 		{
-			state = STATE_STREAM_START;
+			parserState = STATE_STREAM_START;
 		}
 		*processedLen = 1;
 		return RET_OK;
@@ -298,7 +293,7 @@ ParserRet processReceivedData(uint8_t * data, uint32_t len, xStreamBuffer * stre
 			uint8_t n = '\0';
 			lStreamBufferAdd(metaBuff, 0, &n, 1);
 			parseMetaInfo(metaBuff, icyData);
-			state = STATE_STREAM_START;
+			parserState = STATE_STREAM_START;
 		}
 		*processedLen = partLen;
 		return RET_OK;
