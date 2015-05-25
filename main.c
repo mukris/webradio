@@ -147,6 +147,8 @@ int main(void)
 
 	UARTprintf("--- Starting OS ---\n\n");
 
+	vStartLCDTask();
+
 	vStartCliTask();
 
 	vTaskStartScheduler();
