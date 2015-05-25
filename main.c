@@ -12,6 +12,7 @@
 #include "driverlib/rom_map.h"
 #include "driverlib/sysctl.h"
 #include "driverlib/systick.h"
+#include "driverlib/timer.h"
 #include "driverlib/uart.h"
 #include "utils/uartstdio.h"
 #include "FreeRTOS.h"
@@ -20,6 +21,7 @@
 #include "queue.h"
 #include "semphr.h"
 #include "shoutcast.h"
+#include "console.h"
 
 // System Clock rate in Hertz.
 uint32_t g_ui32SysClock;
@@ -145,10 +147,26 @@ int main(void)
 
 	UARTprintf("--- Starting OS ---\n\n");
 
+	vStartCliTask();
+
 	vTaskStartScheduler();
 
 	for (;;)
 		;
+}
+
+#define STATS_TIMER TIMER3_BASE
+
+void configureTimerForRuntimeStats(void) {
+	MAP_SysCtlPeripheralEnable(SYSCTL_PERIPH_TIMER3);
+	MAP_TimerConfigure(STATS_TIMER, TIMER_CFG_PERIODIC_UP);
+	MAP_TimerClockSourceSet(STATS_TIMER, TIMER_CLOCK_SYSTEM);
+	MAP_TimerLoadSet(STATS_TIMER, TIMER_BOTH, 0xFFFFFFFF);
+	MAP_TimerEnable(STATS_TIMER, TIMER_A);
+}
+
+uint32_t getRuntimeCounterValue(void) {
+	return MAP_TimerValueGet(STATS_TIMER, TIMER_A);
 }
 
 /*
