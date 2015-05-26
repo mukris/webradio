@@ -25,7 +25,7 @@
 #define E 				GPIO_PIN_0
 #define STACK_SIZE ( configMINIMAL_STACK_SIZE * 10 )
 
-static const TickType_t xTaskDelay = 0.001 / portTICK_RATE_MS;
+static const TickType_t xTaskDelay = 1 / portTICK_RATE_MS;
 
 void prvLCDTask(void){
 	LCD_Init();
@@ -57,54 +57,55 @@ void LCD_Init(void){
 
 	//Second
 	GPIOPinWrite(PortK, D7 | D6 | D5 | D4,  D4 | D5 );	// Function Set 3h
-	PulseE(500);
+	PulseE(50);
 
 	//Third
 	GPIOPinWrite(PortK, D7 | D6 | D5 | D4,  D4 | D5 );	// Function Set 3h
-	PulseE(500);
+	PulseE(50);
 
 	GPIOPinWrite(PortK, D7 | D6 | D5 | D4,  D5 ); // Function Set 2h
-	PulseE(500);
+	PulseE(50);
 
 	// Function set
 	GPIOPinWrite(PortK, D7 | D6 | D5 | D4,  D5 ); // Function Set 2h
-	PulseE(500);
+	PulseE(50);
 
 	GPIOPinWrite(PortK, D7 | D6 | D5 | D4,  D7 ); // Function Set 8h
-	PulseE(500);
+	PulseE(50);
 
 	// Display ON/OFF (OFF)
 	GPIOPinWrite(PortK, D7 | D6 | D5 | D4,  0x00 ); // Function Set 0h
-	PulseE(500);
+	PulseE(50);
 
 	GPIOPinWrite(PortK, D7 | D6 | D5 | D4,  D7 ); // Function Set 8h
-	PulseE(500);
+	PulseE(50);
 
 	//Clear display
 	GPIOPinWrite(PortK, D7 | D6 | D5 | D4,  0x00 ); // Function Set 0h
-	PulseE(500);
+	PulseE(50);
 
 	GPIOPinWrite(PortK, D7 | D6 | D5 | D4,  D4 ); // Function Set 1h
-	PulseE(500);
+	PulseE(5000);
 
 	//Entry mode
 	GPIOPinWrite(PortK, D7 | D6 | D5 | D4,  0x00 ); // Function Set 0h
-	PulseE(500);
+	PulseE(50);
 
 	GPIOPinWrite(PortK, D7 | D6 | D5 | D4,  D5 | D6 ); // Function Set 6h
-	PulseE(500);
+	PulseE(50);
 
 	// Display ON/OFF
 	GPIOPinWrite(PortK, D7 | D6 | D5 | D4,  0x00 ); // Function Set 0h
-	PulseE(500);
+	PulseE(50);
 
-	GPIOPinWrite(PortK, D7 | D6 | D5 | D4,  D7 | D6  ); // Function Set 8h
-	PulseE(500);
+	GPIOPinWrite(PortK, D7 | D6 | D5 | D4,  D7 | D6  ); // Function Set Ch
+	PulseE(50);
 
+	//LCDWrite("0");
 	LCDWriteText("Hello World!", 0, 0);
+	LCDWriteText("Hello World!", 1, 0);
 	LCDWriteText("Hello World!", 0, 0);
-	LCDWriteText("Hello World!", 0, 0);
-	LCDWriteText("Hello World!", 0, 0);
+	LCDWriteText("Hello World!", 1, 0);
 
 }
 
@@ -112,13 +113,13 @@ void LCDCommand(unsigned char command) {
 
 	GPIOPinWrite(PortK, D7 | D6 | D5 | D4, (command & 0xf0) );
 	GPIOPinWrite(PortK, RS, 0x00);
-	PulseE(500);
+	PulseE(50);
 
 	GPIOPinWrite(PortK, D7 | D6 | D5 | D4, (command & 0x0f) << 4 );
 	GPIOPinWrite(PortK, RS, 0x00);
-	PulseE(500);
+	PulseE(50);
 
-	vTaskDelay(1*xTaskDelay);
+	vTaskDelay(100*xTaskDelay);
 
 }
 
@@ -146,15 +147,15 @@ void LCDWriteText(char* inputText,unsigned char row, unsigned char col) {
 	break;
 	}
 
-	//LCDCommand(address_d);
+	LCDCommand(address_d);
 
 	while(*inputText)					// Place a string, letter by letter.
 		LCDWrite(*inputText++);
 }
 
-void PulseE(double us){
+void PulseE(int us){
 	GPIOPinWrite(PortK, E, E);	//enable
-	vTaskDelay(100*xTaskDelay);	//wait a bit
+	//vTaskDelay(10*xTaskDelay);	//wait a bit
 	GPIOPinWrite(PortK, E, 0x00);	//enable off
 	vTaskDelay(us*xTaskDelay);	//wait 4.1 ms
 }
