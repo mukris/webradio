@@ -1,27 +1,33 @@
-#if 0
 #include "FreeRTOS.h"
 #include "task.h"
 #include "queue.h"
 #include "inc/hw_memmap.h"
 #include "driverlib/ssi.h"
+#include "inc/hw_ssi.h"
 #include "driverlib/udma.h"
 #include "driverlib/gpio.h"
+#include "driverlib/interrupt.h"
+#include "inc/hw_ints.h"
 
 #define STACK_SIZE ( configMINIMAL_STACK_SIZE * 3 )
 #define delay(ms) vTaskDelay((TickType_t) (ms) / portTICK_RATE_MS)
-#define MP3_SAMPLE_RATE 44100 //TODO
-
-#define NEW_PACK_INST 0
+//TODO
+#define MP3_BLOCK_SIZE 1024
+//#define NEW_PACK_INST 0
 #define VOL_SET_INST 1
+#define BITRATE_SET_INST 2
+
+QueueHandle_t codecQueue;
+QueueHandle_t codecInstQueue;
+volatile uint8_t transState;//jó helyen?
 
 void SSIInit(){
 	SSIConfigSetExpClk(SSI0_BASE, SysCtlClockGet(), SSI_FRF_MOTO_MODE_0,
 			SSI_MODE_MASTER, 4000000, 8);
-	SSIDMAEnable(SSI0_BASE, SSI_DMA_TX);
 	SSIEnable(SSI0_BASE);
 }
 
-void DMAInit(){
+void TransferInit(char* point0, char* point1){
 	/*uDMAEnable();
 	uDMAControlBaseSet();
 	uDMAChannelAttributeEnable();
@@ -33,53 +39,65 @@ void DMAInit(){
 	SSIDisable(SSI0_BASE);
 
 	uint8_t pui8DMAControlTable[1024];
-	uint8_t pui8SourceBuffer[256];
-	uint8_t pui8DestBuffer[256];
 	uDMAEnable();
 	uDMAControlBaseSet(&pui8DMAControlTable[0]);
-//uDMAChannelAttributeDisable(UDMA_CHANNEL_SW, UDMA_CONFIG_ALL);
-	uDMAChannelControlSet(UDMA_CHANNEL_SW | UDMA_PRI_SELECT,
+	//setting primary
+	uDMAChannelControlSet(UDMA_CHANNEL_SSI0TX | UDMA_PRI_SELECT,
 	UDMA_SIZE_8 | UDMA_SRC_INC_8 |
-	UDMA_DST_INC_8 | UDMA_ARB_8);
-	uDMAChannelTransferSet(UDMA_CHANNEL_SW | UDMA_PRI_SELECT,
-	UDMA_MODE_AUTO, pui8SourceBuffer, pui8DestBuffer,
-	sizeof(pui8DestBuffer));
-	uDMAChannelEnable(UDMA_CHANNEL_SW);
-	uDMAChannelRequest(UDMA_CHANNEL_SW);
+	UDMA_DST_INC_8 | UDMA_ARB_4);
+	uDMAChannelTransferSet(UDMA_CHANNEL_SSI0TX | UDMA_PRI_SELECT,
+	UDMA_MODE_PINGPONG, point0, (SSI0_BASE + SSI_O_DR),
+	MP3_BLOCK_SIZE);
+	//setting alternative
+	uDMAChannelControlSet(UDMA_CHANNEL_SSI0TX | UDMA_ALT_SELECT,
+	UDMA_SIZE_8 | UDMA_SRC_INC_8 |
+	UDMA_DST_INC_8 | UDMA_ARB_4);
+	uDMAChannelTransferSet(UDMA_CHANNEL_SSI0TX | UDMA_ALT_SELECT,
+	UDMA_MODE_PINGPONG, point1, (SSI0_BASE + SSI_O_DR),
+	MP3_BLOCK_SIZE);
+	uDMAChannelEnable(UDMA_CHANNEL_SSI0TX);
+	uDMAChannelRequest(UDMA_CHANNEL_SSI0TX);
 
+	SSIDMAEnable(SSI0_BASE, SSI_DMA_TX);
 	SSIEnable(SSI0_BASE);
+
+	//SSIIntEnable(SSI0_BASE,SSI_RXTO | SSI_RXOR);
+	IntEnable(INT_SSI0);
 }
 
+//WARNINIG Spinlock
 void codecInstSend(uint8_t addr,uint16_t data){
-	//ui32Port is the base address of the GPIO port.
-	//ui8Pins is the bit-packed representation of the pin(s).
 	while(GPIOPinRead(GPIO_PORTK_BASE,GPIO_PIN_2)==0){
-		delay(10);
+		//delay(10);
 	}
 	GPIOPinWrite(GPIO_PORTK_BASE,GPIO_PIN_3,0);
-	SSISend((uint8_t)2);
-	SSISend(addr);
-	SSISend((uint8_t)(data>>8));
+	SSIDataPut((uint8_t)2);
+	SSIDataPut(addr);
+	SSIDataPut((uint8_t)(data>>8));
 	while(GPIOPinRead(GPIO_PORTK_BASE,GPIO_PIN_2)!=0){
-			delay(10);
+			//delay(10);
 		}
 	while(GPIOPinRead(GPIO_PORTK_BASE,GPIO_PIN_2)==0){
-			delay(10);
-	SSISend((uint8_t)data);
+			//delay(10);
+	}
+	SSIDataPut((uint8_t)data);
 	while(GPIOPinRead(GPIO_PORTK_BASE,GPIO_PIN_2)!=0){
-		delay(10);
+		//delay(10);
 	}
 	GPIOPinWrite(GPIO_PORTK_BASE,GPIO_PIN_3,0xFF);
 	while(GPIOPinRead(GPIO_PORTK_BASE,GPIO_PIN_2)==0){
-		delay(10);
+		//delay(10);
 	}
 }
 
 void codecInit(){
 	GPIODirModeSet(GPIO_PORTK_BASE,GPIO_PIN_3,GPIO_DIR_MODE_OUT);
-	codecInstSend(addr,data);//TODO
-	codecInstSend(addr,data);
-	codecInstSend(addr,data);
+	//TODO
+	codecInstSend(0x0,0x4840);//MICP (or LINE1)?
+	codecInstSend(0x5,0xAC45); //44100 Hz stereo
+	codecInstSend(0x8,0b);
+	codecInstSend(0x9,0b);
+	codecInstSend(0xB,0b);//volume
 }
 
 void volumeSet(int newVolume){
@@ -89,29 +107,66 @@ void volumeSet(int newVolume){
 struct codecInst
 {
 	char instType;
-	int data;
+	uint32_t data;
 } codecInstBuffer;
+
+//
+// The Interrupt
+//
+ void DMAInterrupt (void)
+{
+	 static char sel=0;
+	 char* point;
+	 if(uxQueueMessagesWaiting(codecQueue)){
+		 xQueueReceive(codecQueue,&point,0);
+		 if(!sel){
+			 uDMAChannelTransferSet(UDMA_CHANNEL_SSI0TX | UDMA_PRI_SELECT,
+			 UDMA_MODE_PINGPONG, point, (SSI0_BASE + SSI_O_DR),
+			 MP3_BLOCK_SIZE);
+			 sel=1;
+		 }else{
+			 uDMAChannelTransferSet(UDMA_CHANNEL_SSI0TX | UDMA_ALT_SELECT,
+			 UDMA_MODE_PINGPONG, point, (SSI0_BASE + SSI_O_DR),
+			 MP3_BLOCK_SIZE);
+			 sel=0;
+		 }
+	 }else{
+		 SSIDisable(SSI0_BASE);
+		 transState = 1;
+	 }
+	 SSIIntClear(SSI0_BASE, SSI_RXTO | SSI_RXOR);//IRQ clear?
+}
 
 //
 // codecAccess task
 //
 void codecAccess(){
-	DMAInit();
-	int i = 0;
-	QueueHandle_t codecQueue = xQueueCreate(10, sizeof(struct codecInst *));
+	uint8_t i = 0;
+	transState = 0;
 	struct codecInst *codecInstBuffer;
-	while(1){;
-		for(i=uxQueueMessagesWaiting(codecQueue);i>0;i--){
-			xQueueReceive(codecQueue,&codecInstBuffer,0);
+	while(uxQueueMessagesWaiting(codecQueue)>=2);
+	{
+		char* p0,p1;
+		xQueueReceive(codecQueue,&p0,0);
+		xQueueReceive(codecQueue,&p1,0);
+		TransferInit(p0,p1);
+	}
+	while(1){
+		for(i=uxQueueMessagesWaiting(codecInstQueue);i>0;i--){
+			xQueueReceive(codecInstQueue,&codecInstBuffer,0);
 			switch(codecInstBuffer->instType){
-			case NEW_PACK_INST:
-				//TODO
-				break;
 			case VOL_SET_INST:
+				//TODO
+			break;
+			case BITRATE_SET_INST:
 				//TODO
 			}
 		}
-		delay(50);
+		if(transState!=0 && uxQueueMessagesWaiting(codecQueue)>0){
+			SSIEnable(SSI0_BASE);
+			IntTrigger(INT_SSI0);
+		}
+		delay(100);
 	}
 }
 
@@ -119,7 +174,8 @@ void vStartCodecAccessTask(void)
 {
 	SSIInit();
 	codecInit();
-	//QueueHandle_t codecQueue = xQueueCreate(10, sizeof(struct codecInst *));
+	QueueHandle_t codecInstQueue = xQueueCreate(10, sizeof(struct codecInst *));
+	QueueHandle_t codecQueue = xQueueCreate(10, sizeof(char*));
 	xTaskCreate(codecAccess, /* The function that implements the task. */
 				"codecAccess", /* Just a text name for the task to aid debugging. */
 				STACK_SIZE, /* The stack size is defined in FreeRTOSIPConfig.h. */
@@ -127,7 +183,7 @@ void vStartCodecAccessTask(void)
 				tskIDLE_PRIORITY + 2, /* The priority assigned to the task is defined in FreeRTOSConfig.h. */
 				NULL); /* The task handle is not used. */
 }
-#endif
+
 
 
 
