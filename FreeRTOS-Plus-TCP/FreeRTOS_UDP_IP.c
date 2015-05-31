@@ -1,5 +1,5 @@
 /*
- * FreeRTOS+TCP Labs Build 141019 (C) 2014 Real Time Engineers ltd.
+ * FreeRTOS+TCP Labs Build 150406 (C) 2015 Real Time Engineers ltd.
  * Authors include Hein Tibosch and Richard Barry
  *
  *******************************************************************************
@@ -44,7 +44,8 @@
  * 1 tab == 4 spaces!
  *
  * http://www.FreeRTOS.org
- * http://www.FreeRTOS.org/udp
+ * http://www.FreeRTOS.org/plus
+ * http://www.FreeRTOS.org/labs
  *
  */
 
@@ -75,13 +76,6 @@
 /* The expected IP version and header length coded into the IP header itself. */
 #define ipIP_VERSION_AND_HEADER_LENGTH_BYTE ( ( uint8_t ) 0x45 )
 
-/*
- * Complete the pxUDPPacket header with the information passed in
- * pxNetworkBuffer.  ucSocketOptions are passed in case the options include
- * disabling the checksum.
- */
-static void prvCompleteUDPHeader( xNetworkBufferDescriptor_t *pxNetworkBuffer, xUDPPacket_t *pxUDPPacket, BaseType_t xSocketOptions );
-
 /* Part of the Ethernet and IP headers are always constant when sending an IPv4
 UDP packet.  This array defines the constant parts, allowing this part of the
 packet to be filled in using a simple memcpy() instead of individual writes. */
@@ -104,25 +98,6 @@ UdpPacketHeader_t xDefaultPartUDPPacketHeader =
 };
 /*-----------------------------------------------------------*/
 
-static void prvCompleteUDPHeader( xNetworkBufferDescriptor_t *pxNetworkBuffer, xUDPPacket_t *pxUDPPacket, BaseType_t xSocketOptions )
-{
-xUDPHeader_t *pxUDPHeader;
-
-	(void)xSocketOptions;
-
-	pxUDPHeader = &( pxUDPPacket->xUDPHeader );
-
-	/* HT:endian: fields in pxNetworkBuffer were network endian,
-	 * no translation necessary */
-
-	pxUDPHeader->usDestinationPort = pxNetworkBuffer->usPort;
-	pxUDPHeader->usSourcePort = pxNetworkBuffer->usBoundPort;
-	pxUDPHeader->usLength = ( uint16_t ) ( pxNetworkBuffer->xDataLength + sizeof( xUDPHeader_t ) );
-	pxUDPHeader->usLength = FreeRTOS_htons( pxUDPHeader->usLength );
-	pxUDPHeader->usChecksum = 0;
-}
-/*-----------------------------------------------------------*/
-
 void vProcessGeneratedUDPPacket( xNetworkBufferDescriptor_t * const pxNetworkBuffer )
 {
 xUDPPacket_t *pxUDPPacket;
@@ -139,34 +114,30 @@ uint32_t ulIPAddress = pxNetworkBuffer->ulIPAddress;
 	{
 		if( eReturned == eARPCacheHit )
 		{
-			uint8_t xSocketOptions;
+			#if( ipconfigDRIVER_INCLUDED_TX_IP_CHECKSUM == 0 )
+				uint8_t xSocketOptions;
+			#endif
 			iptraceSENDING_UDP_PACKET( pxNetworkBuffer->ulIPAddress );
 
 			/* Create short cuts to the data within the packet. */
 			pxIPHeader = &( pxUDPPacket->xIPHeader );
 
-			/* IP header source and destination addresses must be set before
-			the	UDP checksum is calculated.  The socket options, which
-			specify whether a checksum should be calculated or not, are
-			passed in the as yet unused part of the packet data. */
-			/* HT:endian: changed back to network endian */
-			pxIPHeader->ulDestinationIPAddress = pxNetworkBuffer->ulIPAddress;
-			pxIPHeader->ulSourceIPAddress = *ipLOCAL_IP_ADDRESS_POINTER;
+		#if ( ipconfigSUPPORT_OUTGOING_PINGS == 1 )
+			/* Is it possible that the packet is not actually a UDP packet
+			after all, but an ICMP packet. */
+			if( pxNetworkBuffer->usPort != ipPACKET_CONTAINS_ICMP_DATA )
+		#endif /* ipconfigSUPPORT_OUTGOING_PINGS */
+			{
+			xUDPHeader_t *pxUDPHeader;
 
-			#if ( ipconfigSUPPORT_OUTGOING_PINGS == 1 )
-			{
-				/* Is it possible that the packet is not actually a UDP packet
-				after all, but an ICMP packet. */
-				if( pxNetworkBuffer->usPort != ipPACKET_CONTAINS_ICMP_DATA )
-				{
-					prvCompleteUDPHeader( pxNetworkBuffer, pxUDPPacket, ( BaseType_t ) pxNetworkBuffer->pucEthernetBuffer[ ipSOCKET_OPTIONS_OFFSET ] );
-				}
+				pxUDPHeader = &( pxUDPPacket->xUDPHeader );
+
+				pxUDPHeader->usDestinationPort = pxNetworkBuffer->usPort;
+				pxUDPHeader->usSourcePort = pxNetworkBuffer->usBoundPort;
+				pxUDPHeader->usLength = ( uint16_t ) ( pxNetworkBuffer->xDataLength + sizeof( xUDPHeader_t ) );
+				pxUDPHeader->usLength = FreeRTOS_htons( pxUDPHeader->usLength );
+				pxUDPHeader->usChecksum = 0;
 			}
-			#else /* ipconfigSUPPORT_OUTGOING_PINGS */
-			{
-				prvCompleteUDPHeader( pxNetworkBuffer, pxUDPPacket, ( BaseType_t ) pxNetworkBuffer->pucEthernetBuffer[ ipSOCKET_OPTIONS_OFFSET ] );
-			}
-			#endif /* ipconfigSUPPORT_OUTGOING_PINGS */
 
 			/* memcpy() the constant parts of the header information into
 			the	correct location within the packet.  This fills in:
@@ -183,26 +154,22 @@ uint32_t ulIPAddress = pxNetworkBuffer->ulIPAddress;
 				xIPHeader.usHeaderChecksum
 			*/
 			/* Save options now, as they will be overwritten by memcpy */
-			xSocketOptions = pxNetworkBuffer->pucEthernetBuffer[ ipSOCKET_OPTIONS_OFFSET ];
+			#if( ipconfigDRIVER_INCLUDED_TX_IP_CHECKSUM == 0 )
+				xSocketOptions = pxNetworkBuffer->pucEthernetBuffer[ ipSOCKET_OPTIONS_OFFSET ];
+			#endif
 			memcpy( ( void *) &( pxUDPPacket->xEthernetHeader.xSourceAddress ), ( void * ) xDefaultPartUDPPacketHeader.ucBytes, sizeof( xDefaultPartUDPPacketHeader ) );
 
-			#if ipconfigSUPPORT_OUTGOING_PINGS == 1
+		#if ipconfigSUPPORT_OUTGOING_PINGS == 1
+			if( pxNetworkBuffer->usPort == ipPACKET_CONTAINS_ICMP_DATA )
 			{
-				if( pxNetworkBuffer->usPort == ipPACKET_CONTAINS_ICMP_DATA )
-				{
-					pxIPHeader->ucProtocol = ipPROTOCOL_ICMP;
-					pxIPHeader->usLength = ( uint16_t ) ( pxNetworkBuffer->xDataLength + sizeof( xIPHeader_t ) );
-				}
-				else
-				{
-					pxIPHeader->usLength = ( uint16_t ) ( pxNetworkBuffer->xDataLength + sizeof( xIPHeader_t ) + sizeof( xUDPHeader_t ) );
-				}
+				pxIPHeader->ucProtocol = ipPROTOCOL_ICMP;
+				pxIPHeader->usLength = ( uint16_t ) ( pxNetworkBuffer->xDataLength + sizeof( xIPHeader_t ) );
 			}
-			#else /* ipconfigSUPPORT_OUTGOING_PINGS */
+			else
+		#endif /* ipconfigSUPPORT_OUTGOING_PINGS */
 			{
 				pxIPHeader->usLength = ( uint16_t ) ( pxNetworkBuffer->xDataLength + sizeof( xIPHeader_t ) + sizeof( xUDPHeader_t ) );
 			}
-			#endif /* ipconfigSUPPORT_OUTGOING_PINGS */
 
 			/* The total transmit size adds on the Ethernet header. */
 			pxNetworkBuffer->xDataLength = pxIPHeader->usLength + sizeof( xEthernetHeader_t );

@@ -1,5 +1,5 @@
 /*
- * FreeRTOS+TCP Labs Build 141019 (C) 2014 Real Time Engineers ltd.
+ * FreeRTOS+TCP Labs Build 150406 (C) 2015 Real Time Engineers ltd.
  * Authors include Hein Tibosch and Richard Barry
  *
  *******************************************************************************
@@ -44,7 +44,8 @@
  * 1 tab == 4 spaces!
  *
  * http://www.FreeRTOS.org
- * http://www.FreeRTOS.org/udp
+ * http://www.FreeRTOS.org/plus
+ * http://www.FreeRTOS.org/labs
  *
  */
 
@@ -62,7 +63,17 @@ xNetworkBufferDescriptor_t *pxNetworkBufferGetFromISR( size_t xRequestedSizeByte
 void vReleaseNetworkBufferAndDescriptor( xNetworkBufferDescriptor_t * const pxNetworkBuffer );
 BaseType_t vNetworkBufferReleaseFromISR( xNetworkBufferDescriptor_t * const pxNetworkBuffer );
 uint8_t *pucGetNetworkBuffer( size_t *pxRequestedSizeBytes );
-void vNetworkBufferRelease( uint8_t *pucEthernetBuffer );
+void vReleaseNetworkBuffer( uint8_t *pucEthernetBuffer );
+
+/* Get the current number of free network buffers. */
+UBaseType_t uxGetNumberOfFreeNetworkBuffers( void );
+
+/* Get the lowest number of free network buffers. */
+UBaseType_t uxGetMinimumFreeNetworkBuffers( void );
+
+/* Copy a network buffer into a bigger buffer. */
+xNetworkBufferDescriptor_t *pxDuplicateNetworkBufferWithDescriptor( xNetworkBufferDescriptor_t * const pxNetworkBuffer,
+	BaseType_t xNewLength);
 
 #if ipconfigTCP_IP_SANITY
 /*

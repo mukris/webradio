@@ -12,6 +12,7 @@
 #include "driverlib/rom_map.h"
 #include "driverlib/sysctl.h"
 #include "driverlib/systick.h"
+#include "driverlib/timer.h"
 #include "driverlib/uart.h"
 #include "utils/uartstdio.h"
 #include "FreeRTOS.h"
@@ -19,6 +20,9 @@
 #include "task.h"
 #include "queue.h"
 #include "semphr.h"
+#include "shoutcast.h"
+#include "console.h"
+#include "lcd.h"
 
 // System Clock rate in Hertz.
 uint32_t g_ui32SysClock;
@@ -142,14 +146,30 @@ int main(void)
 	//IntPrioritySet(INT_EMAC0_TM4C129, configMAC_INTERRUPT_PRIORITY);
 	IntPrioritySet(INT_UART0, configUART_INTERRUPT_PRIORITY);
 
-	vStartRfidTask();
-
 	UARTprintf("--- Starting OS ---\n\n");
+
+	vStartLCDTask();
+
+	vStartCliTask();
 
 	vTaskStartScheduler();
 
 	for (;;)
 		;
+}
+
+#define STATS_TIMER TIMER3_BASE
+
+void configureTimerForRuntimeStats(void) {
+	MAP_SysCtlPeripheralEnable(SYSCTL_PERIPH_TIMER3);
+	MAP_TimerConfigure(STATS_TIMER, TIMER_CFG_PERIODIC_UP);
+	MAP_TimerClockSourceSet(STATS_TIMER, TIMER_CLOCK_SYSTEM);
+	MAP_TimerLoadSet(STATS_TIMER, TIMER_BOTH, 0xFFFFFFFF);
+	MAP_TimerEnable(STATS_TIMER, TIMER_A);
+}
+
+uint32_t getRuntimeCounterValue(void) {
+	return MAP_TimerValueGet(STATS_TIMER, TIMER_A);
 }
 
 /*
@@ -223,14 +243,20 @@ void vApplicationMallocFailedHook(void)
 void vApplicationIPNetworkEventHook(eIPCallbackEvent_t eNetworkEvent)
 {
 	static BaseType_t xTaskAlreadyCreated = pdFALSE;
+	//char radio[] = "http://185.33.23.5:80";
+	//char radio[] = "http://50.30.37.166:42000";
+	//char radio[] = "http://204.62.13.214:80/musicone/mp3/128k";
+	char radio[] = "http://listen.radionomy.com/PARTYVIBERADIO-Reggae-Roots-Dancehall-Dub";
 
 	if (eNetworkEvent == eNetworkUp)
 	{
 		if (xTaskAlreadyCreated == pdFALSE)
 		{
-			UARTprintf("Starting broadcaster task\n");
-			vStartBroadcasterTask(mainECHO_CLIENT_TASK_PRIORITY);
-			vStartTcpServer();
+			UARTprintf("Starting Shoutcast task\n");
+			vStartShoutcastReceiver();
+
+			xQueueSendToBack(radioChannelQueue, radio, 0);
+
 			xTaskAlreadyCreated = pdTRUE;
 		}
 	}

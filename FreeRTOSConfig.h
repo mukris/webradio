@@ -75,7 +75,7 @@
 #define configCPU_CLOCK_HZ                  ( ( unsigned long ) 120000000 )
 #define configTICK_RATE_HZ                  ( 100 )
 #define configMINIMAL_STACK_SIZE            ( ( unsigned short ) 200 )
-#define configTOTAL_HEAP_SIZE               ( ( size_t ) ( 60000 ) )
+#define configTOTAL_HEAP_SIZE               ( ( size_t ) ( 120000 ) )
 #define configMAX_TASK_NAME_LEN             ( 12 )
 #define configUSE_TRACE_FACILITY            1
 #define configUSE_16_BIT_TICKS              0
@@ -96,6 +96,15 @@
 #define configTIMER_QUEUE_LENGTH		5
 #define configTIMER_TASK_STACK_DEPTH	configMINIMAL_STACK_SIZE
 
+#define configGENERATE_RUN_TIME_STATS			1
+#define configUSE_STATS_FORMATTING_FUNCTIONS	1
+
+extern void configureTimerForRuntimeStats(void);
+#define portCONFIGURE_TIMER_FOR_RUN_TIME_STATS configureTimerForRuntimeStats
+
+extern uint32_t getRuntimeCounterValue(void);
+#define portGET_RUN_TIME_COUNTER_VALUE getRuntimeCounterValue
+
 /* Set the following definitions to 1 to include the API function, or zero
 to exclude the API function. */
 
@@ -115,6 +124,15 @@ to exclude the API function. */
 #define configMAX_SYSCALL_INTERRUPT_PRIORITY    ( 1 << 5 )  /* Priority 1, or 0x20 as only the top three bits are implemented. */
 #define configMAC_INTERRUPT_PRIORITY            ( 2 << 5 )
 #define configUART_INTERRUPT_PRIORITY           ( 6 << 5 )
+
+/* The size of the global output buffer that is available for use when there
+are multiple command interpreters running at once (for example, one on a UART
+and one on TCP/IP).  This is done to prevent an output buffer being defined by
+each implementation - which would waste RAM.  In this case, there is only one
+command interpreter running, and it has its own local output buffer, so the
+global buffer is just set to be one byte long as it is not used and should not
+take up unnecessary RAM. */
+#define configCOMMAND_INT_MAX_OUTPUT_SIZE 1
 
 /* The LPC1830 Ethernet peripheral uses a DMA to transmit and receive packets.
 The DMA uses a chain of descriptors to reference Ethernet buffers, and provide

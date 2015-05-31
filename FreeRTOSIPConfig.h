@@ -254,7 +254,7 @@ aborted. */
 #define ipconfigUSE_TCP				( 1 )
 
 /* USE_WIN: Let TCP use windowing mechanism. */
-#define ipconfigUSE_TCP_WIN			( 1 )
+#define ipconfigUSE_TCP_WIN			( 0 )
 
 /* The MTU is the maximum number of bytes the payload of a network frame can
 contain.  For normal Ethernet V2 frames the maximum MTU is 1500.  Setting a
@@ -313,10 +313,10 @@ simultaneously, one could define TCP_WIN_SEG_COUNT as 120. */
 
 /* Each TCP socket has a circular buffers for Rx and Tx, which have a fixed
 maximum size.  Define the size of Rx buffer for TCP sockets. */
-#define ipconfigTCP_RX_BUF_LEN			( 1000 )
+#define ipconfigTCP_RX_BUF_LEN			( 4000 )
 
 /* Define the size of Tx buffer for TCP sockets. */
-#define ipconfigTCP_TX_BUF_LEN			( 1000 )
+#define ipconfigTCP_TX_BUF_LEN			( 2000 )
 
 /* When using call-back handlers, the driver may check if the handler points to
 real program memory (RAM or flash) or just has a random non-zero value. */
