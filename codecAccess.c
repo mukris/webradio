@@ -56,7 +56,6 @@ void TransferInit(char* point0, char* point1){
 	UDMA_MODE_PINGPONG, point1, (SSI0_BASE + SSI_O_DR),
 	MP3_BLOCK_SIZE);
 	uDMAChannelEnable(UDMA_CHANNEL_SSI0TX);
-	uDMAChannelRequest(UDMA_CHANNEL_SSI0TX);
 
 	SSIDMAEnable(SSI0_BASE, SSI_DMA_TX);
 	SSIEnable(SSI0_BASE);
@@ -92,16 +91,11 @@ void codecInstSend(uint8_t addr,uint16_t data){
 
 void codecInit(){
 	GPIODirModeSet(GPIO_PORTK_BASE,GPIO_PIN_3,GPIO_DIR_MODE_OUT);
-	//TODO
-	codecInstSend(0x0,0x4840);//MICP (or LINE1)?
+	codecInstSend(0x0,0x4840); //MICP (or LINE1)?
 	codecInstSend(0x5,0xAC45); //44100 Hz stereo
-	codecInstSend(0x8,0b);
-	codecInstSend(0x9,0b);
-	codecInstSend(0xB,0b);//volume
-}
-
-void volumeSet(int newVolume){
-
+	codecInstSend(0x8,0b11010000000000); //44100Hz 320kbit/s
+	codecInstSend(0x9,0b00011 | (2047<<5)); //noCRC MP3 MPG2.5
+	codecInstSend(0xB,0x8080); //volume - about half of max
 }
 
 struct codecInst
@@ -156,7 +150,9 @@ void codecAccess(){
 			xQueueReceive(codecInstQueue,&codecInstBuffer,0);
 			switch(codecInstBuffer->instType){
 			case VOL_SET_INST:
-				//TODO
+				uDMAChannelDisable(UDMA_CHANNEL_SSI0TX);
+				codecInstSend(0xB,codecInstBuffer->data);
+				uDMAChannelEnable(UDMA_CHANNEL_SSI0TX);
 			break;
 			case BITRATE_SET_INST:
 				//TODO
