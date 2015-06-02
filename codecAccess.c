@@ -11,8 +11,6 @@
 
 #define STACK_SIZE ( configMINIMAL_STACK_SIZE * 3 )
 #define delay(ms) vTaskDelay((TickType_t) (ms) / portTICK_RATE_MS)
-//TODO
-#define MP3_BLOCK_SIZE 1024
 //#define NEW_PACK_INST 0
 #define VOL_SET_INST 1
 #define BITRATE_SET_INST 2
@@ -27,7 +25,7 @@ void SSIInit(){
 	SSIEnable(SSI0_BASE);
 }
 
-void TransferInit(char* point0, char* point1){
+void TransferInit(void* point0, uint32_t size0,void* point1, uint32_t size1){
 	/*uDMAEnable();
 	uDMAControlBaseSet();
 	uDMAChannelAttributeEnable();
@@ -47,14 +45,14 @@ void TransferInit(char* point0, char* point1){
 	UDMA_DST_INC_8 | UDMA_ARB_4);
 	uDMAChannelTransferSet(UDMA_CHANNEL_SSI0TX | UDMA_PRI_SELECT,
 	UDMA_MODE_PINGPONG, point0, (SSI0_BASE + SSI_O_DR),
-	MP3_BLOCK_SIZE);
+	size0);
 	//setting alternative
 	uDMAChannelControlSet(UDMA_CHANNEL_SSI0TX | UDMA_ALT_SELECT,
 	UDMA_SIZE_8 | UDMA_SRC_INC_8 |
 	UDMA_DST_INC_8 | UDMA_ARB_4);
 	uDMAChannelTransferSet(UDMA_CHANNEL_SSI0TX | UDMA_ALT_SELECT,
 	UDMA_MODE_PINGPONG, point1, (SSI0_BASE + SSI_O_DR),
-	MP3_BLOCK_SIZE);
+	size1);
 	uDMAChannelEnable(UDMA_CHANNEL_SSI0TX);
 
 	SSIDMAEnable(SSI0_BASE, SSI_DMA_TX);
@@ -104,24 +102,29 @@ struct codecInst
 	uint32_t data;
 } codecInstBuffer;
 
+struct codecTranfer
+{
+	void* point;
+	uint32_t size;
+} codecTransferBuffer;
+
 //
 // The Interrupt
 //
  void DMAInterrupt (void)
 {
 	 static char sel=0;
-	 char* point;
-	 if(uxQueueMessagesWaiting(codecQueue)){
-		 xQueueReceive(codecQueue,&point,0);
+	 if(uxQueueMessagesWaitingFromISR(codecQueue)){
+		 xQueueReceiveFromISR(codecQueue,&codecTransferBuffer,0);
 		 if(!sel){
 			 uDMAChannelTransferSet(UDMA_CHANNEL_SSI0TX | UDMA_PRI_SELECT,
-			 UDMA_MODE_PINGPONG, point, (SSI0_BASE + SSI_O_DR),
-			 MP3_BLOCK_SIZE);
+			 UDMA_MODE_PINGPONG, codecTransferBuffer.point, (SSI0_BASE + SSI_O_DR),
+			 codecTransferBuffer.size);
 			 sel=1;
 		 }else{
 			 uDMAChannelTransferSet(UDMA_CHANNEL_SSI0TX | UDMA_ALT_SELECT,
-			 UDMA_MODE_PINGPONG, point, (SSI0_BASE + SSI_O_DR),
-			 MP3_BLOCK_SIZE);
+			 UDMA_MODE_PINGPONG, codecTransferBuffer.point, (SSI0_BASE + SSI_O_DR),
+			 codecTransferBuffer.size);
 			 sel=0;
 		 }
 	 }else{
@@ -138,12 +141,17 @@ void codecAccess(){
 	uint8_t i = 0;
 	transState = 0;
 	struct codecInst *codecInstBuffer;
-	while(uxQueueMessagesWaiting(codecQueue)>=2);
+	/*while(uxQueueMessagesWaiting(codecQueue)<2){
+		delay(100);
+	}*/
 	{
-		char* p0,p1;
-		xQueueReceive(codecQueue,&p0,0);
-		xQueueReceive(codecQueue,&p1,0);
-		TransferInit(p0,p1);
+		void* p0;
+		uint32_t s0;
+		xQueueReceive(codecQueue,&codecTransferBuffer,10000);
+		p0 = codecTransferBuffer.point;
+		s0 = codecTransferBuffer.size;
+		xQueueReceive(codecQueue,&codecTransferBuffer,10000);
+		TransferInit(p0,s0,codecTransferBuffer.point,codecTransferBuffer.size);
 	}
 	while(1){
 		for(i=uxQueueMessagesWaiting(codecInstQueue);i>0;i--){
