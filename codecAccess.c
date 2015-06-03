@@ -13,7 +13,7 @@
 #define delay(ms) vTaskDelay((TickType_t) (ms) / portTICK_RATE_MS)
 //#define NEW_PACK_INST 0
 #define VOL_SET_INST 1
-#define BITRATE_SET_INST 2
+#define BASSTREBLE_SET_INST 2
 
 QueueHandle_t codecQueue;
 QueueHandle_t codecInstQueue;
@@ -91,8 +91,6 @@ void codecInit(){
 	GPIODirModeSet(GPIO_PORTK_BASE,GPIO_PIN_3,GPIO_DIR_MODE_OUT);
 	codecInstSend(0x0,0x4840); //MICP (or LINE1)?
 	codecInstSend(0x5,0xAC45); //44100 Hz stereo
-	codecInstSend(0x8,0b11010000000000); //44100Hz 320kbit/s
-	codecInstSend(0x9,0b00011 | (2047<<5)); //noCRC MP3 MPG2.5
 	codecInstSend(0xB,0x8080); //volume - about half of max
 }
 
@@ -162,8 +160,10 @@ void codecAccess(){
 				codecInstSend(0xB,codecInstBuffer->data);
 				uDMAChannelEnable(UDMA_CHANNEL_SSI0TX);
 			break;
-			case BITRATE_SET_INST:
-				//TODO
+			case BASSTREBLE_SET_INST:
+				uDMAChannelDisable(UDMA_CHANNEL_SSI0TX);
+				odecInstSend(0x2,codecInstBuffer->data);
+				uDMAChannelEnable(UDMA_CHANNEL_SSI0TX);
 			}
 		}
 		if(transState!=0 && uxQueueMessagesWaiting(codecQueue)>0){
