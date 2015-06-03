@@ -15,8 +15,8 @@
 #define VOL_SET_INST 1
 #define BASSTREBLE_SET_INST 2
 
-QueueHandle_t codecQueue;
-QueueHandle_t codecInstQueue;
+QueueHandle_t codecInstQueue = xQueueCreate(10, sizeof(struct codecInst *));
+QueueHandle_t codecQueue = xQueueCreate(10, sizeof(char*));
 volatile uint8_t transState;//jó helyen?
 
 void SSIInit(){
@@ -68,16 +68,16 @@ void codecInstSend(uint8_t addr,uint16_t data){
 		//delay(10);
 	}
 	GPIOPinWrite(GPIO_PORTK_BASE,GPIO_PIN_3,0);
-	SSIDataPut((uint8_t)2);
-	SSIDataPut(addr);
-	SSIDataPut((uint8_t)(data>>8));
+	SSIDataPut(SSI0_BASE,(uint8_t)2);
+	SSIDataPut(SSI0_BASE,addr);
+	SSIDataPut(SSI0_BASE,(uint8_t)(data>>8));
 	while(GPIOPinRead(GPIO_PORTK_BASE,GPIO_PIN_2)!=0){
 			//delay(10);
 		}
 	while(GPIOPinRead(GPIO_PORTK_BASE,GPIO_PIN_2)==0){
 			//delay(10);
 	}
-	SSIDataPut((uint8_t)data);
+	SSIDataPut(SSI0_BASE,(uint8_t)data);
 	while(GPIOPinRead(GPIO_PORTK_BASE,GPIO_PIN_2)!=0){
 		//delay(10);
 	}
@@ -138,7 +138,6 @@ struct codecTranfer
 void codecAccess(){
 	uint8_t i = 0;
 	transState = 0;
-	struct codecInst *codecInstBuffer;
 	/*while(uxQueueMessagesWaiting(codecQueue)<2){
 		delay(100);
 	}*/
@@ -162,7 +161,7 @@ void codecAccess(){
 			break;
 			case BASSTREBLE_SET_INST:
 				uDMAChannelDisable(UDMA_CHANNEL_SSI0TX);
-				odecInstSend(0x2,codecInstBuffer->data);
+				codecInstSend(0x2,codecInstBuffer->data);
 				uDMAChannelEnable(UDMA_CHANNEL_SSI0TX);
 			}
 		}
@@ -178,8 +177,6 @@ void vStartCodecAccessTask(void)
 {
 	SSIInit();
 	codecInit();
-	QueueHandle_t codecInstQueue = xQueueCreate(10, sizeof(struct codecInst *));
-	QueueHandle_t codecQueue = xQueueCreate(10, sizeof(char*));
 	xTaskCreate(codecAccess, /* The function that implements the task. */
 				"codecAccess", /* Just a text name for the task to aid debugging. */
 				STACK_SIZE, /* The stack size is defined in FreeRTOSIPConfig.h. */
