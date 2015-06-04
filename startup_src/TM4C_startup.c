@@ -26,6 +26,7 @@
 #include "inc/hw_nvic.h"
 #include "inc/hw_types.h"
 #include "utils/uartstdio.h"
+#include "codecAccess.h" //for SSI0 interrupt
 
 #define WEAK __attribute__ ((weak))
 #define ALIAS(f) __attribute__ ((weak, alias(# f)))

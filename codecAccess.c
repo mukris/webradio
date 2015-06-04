@@ -1,3 +1,4 @@
+#include "stdbool.h"//kell?
 #include "FreeRTOS.h"
 #include "task.h"
 #include "queue.h"
@@ -8,6 +9,7 @@
 #include "driverlib/gpio.h"
 #include "driverlib/interrupt.h"
 #include "inc/hw_ints.h"
+#include "codecAccess.h"
 
 #define STACK_SIZE ( configMINIMAL_STACK_SIZE * 3 )
 #define delay(ms) vTaskDelay((TickType_t) (ms) / portTICK_RATE_MS)
@@ -15,9 +17,34 @@
 #define VOL_SET_INST 1
 #define BASSTREBLE_SET_INST 2
 
-QueueHandle_t codecInstQueue = xQueueCreate(10, sizeof(struct codecInst *));
-QueueHandle_t codecQueue = xQueueCreate(10, sizeof(char*));
+struct codecInst
+{
+	char instType;
+	uint16_t data;
+} codecInstBuffer;
+
+struct codecTransfer
+{
+	void* point;
+	uint32_t size;
+} codecTransferBuffer;
+
+QueueHandle_t codecInstQueue;
+QueueHandle_t codecQueue;
 volatile uint8_t transState;//jó helyen?
+
+void SendCodecInstruct(char instType, uint16_t data){
+	struct codecInst codecInstBuffer2;
+	codecInstBuffer2.instType = instType;
+	codecInstBuffer2.data = data;
+	xQueueSend(codecInstQueue,&codecInstBuffer2,0);
+}
+void SendCodecTransfer(void* point, uint32_t size){
+	struct codecTransfer codecTransferBuffer2;
+	codecTransferBuffer2.point = point;
+	codecTransferBuffer2.size = size;
+	xQueueSend(codecQueue,&codecTransferBuffer2,0);
+}
 
 void SSIInit(){
 	SSIConfigSetExpClk(SSI0_BASE, SysCtlClockGet(), SSI_FRF_MOTO_MODE_0,
@@ -94,18 +121,6 @@ void codecInit(){
 	codecInstSend(0xB,0x8080); //volume - about half of max
 }
 
-struct codecInst
-{
-	char instType;
-	uint32_t data;
-} codecInstBuffer;
-
-struct codecTranfer
-{
-	void* point;
-	uint32_t size;
-} codecTransferBuffer;
-
 //
 // The Interrupt
 //
@@ -138,6 +153,8 @@ struct codecTranfer
 void codecAccess(){
 	uint8_t i = 0;
 	transState = 0;
+	codecInstQueue = xQueueCreate(10, sizeof(struct codecInst));
+	codecQueue = xQueueCreate(10, sizeof(struct codecTransfer));
 	/*while(uxQueueMessagesWaiting(codecQueue)<2){
 		delay(100);
 	}*/
@@ -153,15 +170,15 @@ void codecAccess(){
 	while(1){
 		for(i=uxQueueMessagesWaiting(codecInstQueue);i>0;i--){
 			xQueueReceive(codecInstQueue,&codecInstBuffer,0);
-			switch(codecInstBuffer->instType){
+			switch(codecInstBuffer.instType){
 			case VOL_SET_INST:
 				uDMAChannelDisable(UDMA_CHANNEL_SSI0TX);
-				codecInstSend(0xB,codecInstBuffer->data);
+				codecInstSend(0xB,codecInstBuffer.data);
 				uDMAChannelEnable(UDMA_CHANNEL_SSI0TX);
 			break;
 			case BASSTREBLE_SET_INST:
 				uDMAChannelDisable(UDMA_CHANNEL_SSI0TX);
-				codecInstSend(0x2,codecInstBuffer->data);
+				codecInstSend(0x2,codecInstBuffer.data);
 				uDMAChannelEnable(UDMA_CHANNEL_SSI0TX);
 			}
 		}
