@@ -491,7 +491,7 @@ void parseURL(char *URL, char *request_header, char *host_name, uint16_t *port)
 
 static void onTitleReceived(char * title)
 {
-	xQueueSend(lcdQueue, title, 0);
+	//xQueueSend(lcdQueue, title, 0);
 	UARTprintf("Title: %s\n", title);
 }
 

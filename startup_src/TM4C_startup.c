@@ -26,6 +26,7 @@
 #include "inc/hw_nvic.h"
 #include "inc/hw_types.h"
 #include "utils/uartstdio.h"
+#include "codecAccess.h" //for SSI0 interrupt
 
 #define WEAK __attribute__ ((weak))
 #define ALIAS(f) __attribute__ ((weak, alias(# f)))
@@ -99,7 +100,7 @@ void (* const g_pfnVectors[])(void) =
     IntDefaultHandler,                      // GPIO Port E
 	UARTStdioIntHandler,                    // UART0 Rx and Tx
     IntDefaultHandler,                      // UART1 Rx and Tx
-    IntDefaultHandler,                      // SSI0 Rx and Tx
+	DMAInterrupt,//IntDefaultHandler,                      // SSI0 Rx and Tx
     IntDefaultHandler,                      // I2C0 Master and Slave
     IntDefaultHandler,                      // PWM Fault
     IntDefaultHandler,                      // PWM Generator 0
