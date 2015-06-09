@@ -19,7 +19,7 @@
 
 struct codecInst
 {
-	char instType;
+	CodecInstruction instType;
 	uint16_t data;
 } codecInstBuffer;
 
@@ -33,7 +33,7 @@ QueueHandle_t codecInstQueue;
 QueueHandle_t codecQueue;
 volatile uint8_t transState;//jó helyen?
 
-void SendCodecInstruct(char instType, uint16_t data){
+void SendCodecInstruct(CodecInstruction instType, uint16_t data){
 	struct codecInst codecInstBuffer2;
 	codecInstBuffer2.instType = instType;
 	codecInstBuffer2.data = data;
@@ -170,17 +170,9 @@ void codecAccess(){
 	while(1){
 		for(i=uxQueueMessagesWaiting(codecInstQueue);i>0;i--){
 			xQueueReceive(codecInstQueue,&codecInstBuffer,0);
-			switch(codecInstBuffer.instType){
-			case VOL_SET_INST:
-				uDMAChannelDisable(UDMA_CHANNEL_SSI0TX);
-				codecInstSend(0xB,codecInstBuffer.data);
-				uDMAChannelEnable(UDMA_CHANNEL_SSI0TX);
-			break;
-			case BASSTREBLE_SET_INST:
-				uDMAChannelDisable(UDMA_CHANNEL_SSI0TX);
-				codecInstSend(0x2,codecInstBuffer.data);
-				uDMAChannelEnable(UDMA_CHANNEL_SSI0TX);
-			}
+			uDMAChannelDisable(UDMA_CHANNEL_SSI0TX);
+			codecInstSend(codecInstBuffer.instType, codecInstBuffer.data);
+			uDMAChannelEnable(UDMA_CHANNEL_SSI0TX);
 		}
 		if(transState!=0 && uxQueueMessagesWaiting(codecQueue)>0){
 			SSIEnable(SSI0_BASE);
