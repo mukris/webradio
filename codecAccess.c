@@ -37,13 +37,13 @@ void SendCodecInstruct(CodecInstruction instType, uint16_t data){
 	struct codecInst codecInstBuffer2;
 	codecInstBuffer2.instType = instType;
 	codecInstBuffer2.data = data;
-	xQueueSend(codecInstQueue, codecInstBuffer2, 0);
+	xQueueSend(codecInstQueue,&codecInstBuffer2,0);
 }
 void SendCodecTransfer(void* point, uint32_t size){
 	struct codecTransfer codecTransferBuffer2;
 	codecTransferBuffer2.point = point;
 	codecTransferBuffer2.size = size;
-	xQueueSend(codecQueue, codecTransferBuffer2, 0);
+	xQueueSend(codecQueue,&codecTransferBuffer2,0);
 }
 
 void SSIInit(){
