@@ -165,6 +165,7 @@ void configureTimerForRuntimeStats(void) {
 	MAP_TimerConfigure(STATS_TIMER, TIMER_CFG_PERIODIC_UP);
 	MAP_TimerClockSourceSet(STATS_TIMER, TIMER_CLOCK_SYSTEM);
 	MAP_TimerLoadSet(STATS_TIMER, TIMER_BOTH, 0xFFFFFFFF);
+	MAP_TimerControlStall(STATS_TIMER, TIMER_BOTH, true);
 	MAP_TimerEnable(STATS_TIMER, TIMER_A);
 }
 
