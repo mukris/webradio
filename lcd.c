@@ -29,11 +29,18 @@
 
 static void prvLCDTask(void *pvParameters)
 {
+	char buff[32];
 	LCD_Init();
 
 	LCDWriteText("Hello World!", 0, 0);
 	LCDWriteText("Szia vilag!", 1, 5);
-	while(true);
+	while (true)
+	{
+		if (xQueueReceive(lcdQueue, buff, portMAX_DELAY) == pdTRUE)
+		{
+			LCDWriteText(buff, 0, 0);
+		}
+	}
 }
 //LCD task
 void vStartLCDTask(void)
